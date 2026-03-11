@@ -25,6 +25,8 @@ app.use((req, res, next) => {
   next();
 });
 
+// ── Trust proxy (Railway) ───────────────────
+app.set('trust proxy', 1);
 // ── Rate limit global: 100 req / 15min por IP ─
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
