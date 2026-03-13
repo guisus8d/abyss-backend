@@ -23,14 +23,14 @@ async function getUserByUsername(req, res) {
 async function updateProfile(req, res) {
   try {
     const { profileFrame, bio, username, profileText, profileBg, profileBgType } = req.body;
-    if (profileText !== undefined) update.profileText = profileText;
-    if (profileBg) update.profileBg = profileBg;
-    if (profileBgType) update.profileBgType = profileBgType;
-    if (req.body.profileBlocks !== undefined) update.profileBlocks = req.body.profileBlocks;
     const update = {};
     if (profileFrame) update.profileFrame = profileFrame;
     if (bio !== undefined) update.bio = bio;
     if (username) update.username = username;
+    if (profileText !== undefined) update.profileText = profileText;
+    if (profileBg !== undefined) update.profileBg = profileBg;
+    if (profileBgType) update.profileBgType = profileBgType;
+    if (req.body.profileBlocks !== undefined) update.profileBlocks = req.body.profileBlocks;
     const user = await User.findByIdAndUpdate(req.user._id, update, { new: true }).populate('badges');
     res.json({ user });
   } catch (err) {
