@@ -27,7 +27,6 @@ async function updateProfile(req, res) {
     if (profileBg) update.profileBg = profileBg;
     if (profileBgType) update.profileBgType = profileBgType;
     if (req.body.profileBlocks !== undefined) update.profileBlocks = req.body.profileBlocks;
-    if (req.body.profileBlocks !== undefined) update.profileBlocks = req.body.profileBlocks;
     const update = {};
     if (profileFrame) update.profileFrame = profileFrame;
     if (bio !== undefined) update.bio = bio;
