@@ -38,4 +38,14 @@ const uploadPost = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
 
-module.exports = { cloudinary, uploadAvatar, uploadPost };
+
+const blockStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'abbys/blocks',
+    allowed_formats: ['jpg','jpeg','png','webp'],
+    transformation: [{ width: 1200, crop: 'limit', quality: 'auto' }],
+  },
+});
+const uploadBlock = multer({ storage: blockStorage, limits: { fileSize: 8*1024*1024 } });
+module.exports = { cloudinary, uploadAvatar, uploadPost, uploadBlock };

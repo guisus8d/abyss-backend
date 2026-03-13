@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { authMiddleware } = require('../middlewares/auth');
-const { uploadAvatar: uploadMiddleware } = require('../config/cloudinary');
+const { uploadAvatar: uploadMiddleware, uploadBlock } = require('../config/cloudinary');
 const { getProfile, getUserByUsername, updateProfile, uploadAvatar } = require('../controllers/user.controller');
 
 router.get('/me', authMiddleware, getProfile);
@@ -40,7 +40,7 @@ router.patch('/me/profile',   authMiddleware, updateProfile);
 router.post('/me/avatar',     authMiddleware, uploadMiddleware.single('avatar'), uploadAvatar);
 
 
-router.post('/me/upload', authMiddleware, uploadMiddleware.single('file'), async (req, res) => {
+router.post('/me/upload', authMiddleware, uploadBlock.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No image' });
     res.json({ url: req.file.path });
