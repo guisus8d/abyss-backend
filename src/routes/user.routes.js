@@ -39,4 +39,13 @@ router.get('/:username',      authMiddleware, getUserByUsername);
 router.patch('/me/profile',   authMiddleware, updateProfile);
 router.post('/me/avatar',     authMiddleware, uploadMiddleware.single('avatar'), uploadAvatar);
 
+
+router.post('/me/upload', authMiddleware, uploadMiddleware.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No image' });
+    res.json({ url: req.file.path });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 module.exports = router;
