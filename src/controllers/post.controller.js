@@ -7,12 +7,14 @@ const { getIO } = require('../sockets');
 
 async function createPost(req, res) {
   try {
-    const { content, tags } = req.body;
+    const { content, tags, postType, title } = req.body;
     if (!content?.trim()) return res.status(400).json({ error: 'Contenido requerido' });
 
     const postData = {
       author:  req.user._id,
-      content: content.trim(),
+      content: content?.trim() || "",
+      postType: postType || "quick",
+      title:    title || "",
       tags:    Array.isArray(tags) ? tags : (tags ? [tags] : []),
     };
 
