@@ -48,6 +48,65 @@ router.post('/me/upload', authMiddleware, uploadBlock.single('file'), async (req
     res.status(500).json({ error: err.message });
   }
 });
+
+// ── Moderación ──────────────────────────────────────────────
+const modMiddleware = (req, res, next) => {
+  if (!['mod','admin'].includes(req.user?.role)) return res.status(403).json({ error: 'Sin permisos' });
+  next();
+};
+
+// Banear usuario
+router.post('/mod/ban/:userId', authMiddleware, modMiddleware, async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const user = await User.findByIdAndUpdate(req.params.userId, 
+      { banned: true, bannedReason: reason || 'Violación de normas' }, 
+      { new: true });
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+    res.json({ message: 'Usuario baneado', user });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Desbanear usuario
+router.post('/mod/unban/:userId', authMiddleware, modMiddleware, async (req, res) => {
+  try {
+    const user = await User.findByIdAndUpdate(req.params.userId,
+      { banned: false, bannedReason: '' }, { new: true });
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+    res.json({ message: 'Usuario desbaneado', user });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Listar usuarios para panel
+router.get('/mod/users', authMiddleware, modMiddleware, async (req, res) => {
+  try {
+    const q = req.query.q || '';
+    const users = await User.find(
+      q ? { username: { $regex: q, $options: 'i' } } : {}
+    ).select('username email avatarUrl role banned bannedReason createdAt xp').limit(50);
+    res.json({ users });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Eliminar post (mod)
+router.delete('/mod/post/:postId', authMiddleware, modMiddleware, async (req, res) => {
+  try {
+    const Post = require('../models/Post');
+    await Post.findByIdAndDelete(req.params.postId);
+    res.json({ message: 'Post eliminado' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Dar/quitar rol mod (solo admin)
+router.post('/mod/setrole/:userId', authMiddleware, async (req, res) => {
+  try {
+    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Solo admins' });
+    const { role } = req.body;
+    const user = await User.findByIdAndUpdate(req.params.userId, { role }, { new: true });
+    res.json({ user });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;
 
 router.delete('/me', authMiddleware, async (req, res) => {
