@@ -17,6 +17,8 @@ const commentSchema = new mongoose.Schema({
 });
 
 const postSchema = new mongoose.Schema({
+  postType: { type: String, default: "quick", enum: ["quick","image","news"] },
+  title:    { type: String, default: "" },
   author:         { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   content:        { type: String, required: true, maxlength: 1000 },
   imageUrl:       { type: String, default: null },
