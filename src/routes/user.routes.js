@@ -49,3 +49,16 @@ router.post('/me/upload', authMiddleware, uploadBlock.single('file'), async (req
   }
 });
 module.exports = router;
+
+router.delete('/me', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const Post    = require('../models/Post');
+    const User    = require('../models/User');
+    await Post.deleteMany({ author: userId });
+    await User.findByIdAndDelete(userId);
+    res.json({ message: 'Cuenta eliminada' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
