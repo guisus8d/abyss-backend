@@ -8,7 +8,7 @@ const { getIO } = require('../sockets');
 async function createPost(req, res) {
   try {
     const { content, tags, postType, title } = req.body;
-    if (!content?.trim()) return res.status(400).json({ error: 'Contenido requerido' });
+    if (!content?.trim() && !title?.trim() && !req.file) return res.status(400).json({ error: 'Contenido requerido' });
 
     const postData = {
       author:  req.user._id,
