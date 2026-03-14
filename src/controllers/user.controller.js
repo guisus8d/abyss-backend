@@ -32,7 +32,7 @@ async function updateProfile(req, res) {
     if (profileBgType) update.profileBgType = profileBgType;
     if (req.body.profileBlocks !== undefined) update.profileBlocks = req.body.profileBlocks;
     if (req.body.profilePrefs !== undefined) update.profilePrefs = req.body.profilePrefs;
-    const user = await User.findByIdAndUpdate(req.user._id, update, { new: true }).populate('badges');
+    const user = await User.findByIdAndUpdate(req.user._id, { $set: update }, { new: true }).populate('badges');
     res.json({ user });
   } catch (err) {
     res.status(500).json({ error: err.message });
