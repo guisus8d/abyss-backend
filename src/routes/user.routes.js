@@ -60,11 +60,14 @@ const modMiddleware = (req, res, next) => {
 router.post('/mod/ban/:userId', authMiddleware, modMiddleware, async (req, res) => {
   try {
     const { reason } = req.body;
-    const user = await User.findByIdAndUpdate(req.params.userId, 
-      { banned: true, bannedReason: reason || 'Violación de normas' }, 
-      { new: true });
-    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
-    res.json({ message: 'Usuario baneado', user });
+    const target = await User.findById(req.params.userId);
+    if (!target) return res.status(404).json({ error: 'Usuario no encontrado' });
+    if (target.role === 'admin') return res.status(403).json({ error: 'No puedes banear a un admin' });
+    if (target.role === 'mod' && req.user.role !== 'admin') return res.status(403).json({ error: 'Solo admins pueden banear mods' });
+    target.banned = true;
+    target.bannedReason = reason || 'Violación de normas';
+    await target.save();
+    res.json({ message: 'Usuario baneado', user: target });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
