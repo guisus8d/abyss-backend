@@ -12,6 +12,7 @@ const userSchema = new mongoose.Schema({
   profileBg:      { type: String, default: '' },
   profileBgType:  { type: String, default: 'color' },
   profileBlocks:  { type: Array,  default: [] },
+  googleId:       { type: String, default: null },
   profilePrefs:   { type: Object, default: { showXp: true, showFollowers: true, showFollowing: true, showPosts: true } },
   profileFrame:   { type: String, default: 'default' },
   avatarUrl:      { type: String, default: null },
