@@ -25,6 +25,7 @@ async function createPost(req, res) {
       postData.imagePublicId = req.file.filename;
     }
 
+    console.log("POSTDATA:", JSON.stringify(postData));
     const post = await Post.create(postData);
     await post.populate('author', '_id username profileFrame xp avatarUrl');
 
