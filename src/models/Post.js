@@ -31,3 +31,4 @@ postSchema.index({ author: 1, createdAt: -1 });
 postSchema.index({ tags: 1 });
 
 module.exports = mongoose.model('Post', postSchema);
+// vie 13 mar 2026 22:40:37 CST
