@@ -8,7 +8,6 @@ const { getIO } = require('../sockets');
 async function createPost(req, res) {
   try {
     const { content, tags, postType, title } = req.body;
-    console.log("BODY:", JSON.stringify(req.body));
     if (!content?.trim() && !title?.trim() && !req.file) return res.status(400).json({ error: 'Contenido requerido' });
 
     const postData = {
@@ -25,7 +24,6 @@ async function createPost(req, res) {
       postData.imagePublicId = req.file.filename;
     }
 
-    console.log("POSTDATA:", JSON.stringify(postData));
     const post = await Post.create(postData);
     await post.populate('author', '_id username profileFrame xp avatarUrl');
 
