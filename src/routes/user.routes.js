@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const User = require('../models/User');
 const { authMiddleware } = require('../middlewares/auth');
 const { uploadAvatar: uploadMiddleware, uploadBlock } = require('../config/cloudinary');
 const { getProfile, getUserByUsername, updateProfile, uploadAvatar } = require('../controllers/user.controller');
