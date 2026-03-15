@@ -62,7 +62,7 @@ function initSockets(server) {
       } catch (e) { console.log('chat:read error', e.message); }
     });
 
-    socket.on('chat:send', async ({ chatId, text, replyTo }) => {
+    socket.on('chat:send', async ({ chatId, text, replyTo, type, mediaUrl }) => {
       try {
         const chat = await Chat.findOne({
           _id: chatId,
@@ -72,7 +72,9 @@ function initSockets(server) {
 
         const message = {
           sender:    socket.userId,
-          text:      text.trim(),
+          text:      text?.trim() || '',
+          type:      type || 'text',
+          mediaUrl:  mediaUrl || null,
           readBy:    [socket.userId],
           createdAt: new Date(),
           ...(replyTo ? { replyTo } : {}),
@@ -80,7 +82,7 @@ function initSockets(server) {
 
         chat.messages.push(message);
         chat.lastMessage = new Date();
-        chat.lastMessageText = text.trim();
+        chat.lastMessageText = type === 'image' ? '[Imagen]' : type === 'audio' ? '[Audio]' : text?.trim() || '';
         // Incrementar unread para todos menos el sender
         chat.participants.forEach(p => {
           if (p.toString() !== socket.userId.toString()) {

@@ -212,3 +212,11 @@ router.delete('/:chatId/message/:msgId', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
+const { uploadPost: uploadMedia } = require('../config/cloudinary');
+router.post('/upload', authMiddleware, uploadMedia.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file' });
+    res.json({ url: req.file.path });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});

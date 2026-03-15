@@ -7,7 +7,9 @@ const messageReactionSchema = new mongoose.Schema({
 
 const messageSchema = new mongoose.Schema({
   sender:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  text:      { type: String, required: true, maxlength: 2000 },
+  text:      { type: String, default: "", maxlength: 2000 },
+  type:      { type: String, default: "text", enum: ["text","image","audio"] },
+  mediaUrl:  { type: String, default: null },
   readBy:    [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   reactions: [messageReactionSchema],
   replyTo:   {
