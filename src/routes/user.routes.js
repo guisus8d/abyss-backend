@@ -36,6 +36,17 @@ router.get('/search', authMiddleware, async (req, res) => {
   }
 });
 
+router.get('/random', authMiddleware, async (req, res) => {
+  try {
+    const users = await User.aggregate([
+      { $match: { _id: { $ne: require('mongoose').Types.ObjectId.createFromHexString(req.user._id.toString()) }, banned: { $ne: true } } },
+      { $sample: { size: 10 } },
+      { $project: { username: 1, avatarUrl: 1, xp: 1, profileFrame: 1 } }
+    ]);
+    res.json({ users });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.get('/:username',      authMiddleware, getUserByUsername);
 router.patch('/me/profile',   authMiddleware, updateProfile);
 router.post('/me/avatar',     authMiddleware, uploadMiddleware.single('avatar'), uploadAvatar);
@@ -126,13 +137,3 @@ router.delete('/me', authMiddleware, async (req, res) => {
   }
 });
 
-router.get('/random', authMiddleware, async (req, res) => {
-  try {
-    const users = await User.aggregate([
-      { $match: { _id: { $ne: require('mongoose').Types.ObjectId.createFromHexString(req.user._id.toString()) }, banned: { $ne: true } } },
-      { $sample: { size: 10 } },
-      { $project: { username: 1, avatarUrl: 1, xp: 1, profileFrame: 1 } }
-    ]);
-    res.json({ users });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
