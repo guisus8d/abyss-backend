@@ -13,6 +13,8 @@ const userSchema = new mongoose.Schema({
   profileBgType:  { type: String, default: 'color' },
   profileBlocks:  { type: Array,  default: [] },
   googleId:       { type: String, default: null },
+  coins:          { type: Number, default: 50 },
+  collectionSlots:{ type: Number, default: 10 },
   role:           { type: String, default: "user", enum: ["user","mod","admin"] },
   banned:         { type: Boolean, default: false },
   bannedReason:   { type: String, default: "" },
