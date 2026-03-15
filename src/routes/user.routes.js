@@ -125,3 +125,14 @@ router.delete('/me', authMiddleware, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+router.get('/random', authMiddleware, async (req, res) => {
+  try {
+    const users = await User.aggregate([
+      { $match: { _id: { $ne: require('mongoose').Types.ObjectId.createFromHexString(req.user._id.toString()) }, banned: { $ne: true } } },
+      { $sample: { size: 10 } },
+      { $project: { username: 1, avatarUrl: 1, xp: 1, profileFrame: 1 } }
+    ]);
+    res.json({ users });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
