@@ -85,12 +85,16 @@ router.patch('/request/:fromId', authMiddleware, async (req, res) => {
       }));
       await user.save();
       const lastPending = pendingMsgs[pendingMsgs.length - 1];
-      const chat = await Chat.create({
-        participants: [req.user._id, req.params.fromId],
-        messages: pendingMsgs,
-        lastMessage: lastPending?.createdAt || new Date(),
-        lastMessageText: lastPending?.text || '',
-      });
+      // Evitar chat duplicado
+      let chat = await Chat.findOne({ participants: { $all: [req.user._id, req.params.fromId] } });
+      if (!chat) {
+        chat = await Chat.create({
+          participants: [req.user._id, req.params.fromId],
+          messages: pendingMsgs,
+          lastMessage: lastPending?.createdAt || new Date(),
+          lastMessageText: lastPending?.text || '',
+        });
+      }
       await chat.populate('participants', 'username avatarUrl xp');
       // Notificar al solicitante que fue aceptado
       await Notification.create({ to: req.params.fromId, from: req.user._id, type: 'chat_accepted' });
