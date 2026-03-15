@@ -48,4 +48,15 @@ const blockStorage = new CloudinaryStorage({
   },
 });
 const uploadBlock = multer({ storage: blockStorage, limits: { fileSize: 8*1024*1024 } });
-module.exports = { cloudinary, uploadAvatar, uploadPost, uploadBlock };
+
+const audioStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'abbys/audio',
+    resource_type: 'video',
+    allowed_formats: ['m4a','mp3','wav','ogg','webm'],
+  },
+});
+const uploadAudio = multer({ storage: audioStorage, limits: { fileSize: 20*1024*1024 } });
+
+module.exports = { cloudinary, uploadAvatar, uploadPost, uploadBlock, uploadAudio };

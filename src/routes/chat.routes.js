@@ -213,8 +213,14 @@ router.delete('/:chatId/message/:msgId', authMiddleware, async (req, res) => {
 
 module.exports = router;
 
-const { uploadPost: uploadMedia } = require('../config/cloudinary');
-router.post('/upload', authMiddleware, uploadMedia.single('file'), async (req, res) => {
+const { uploadPost: uploadMedia, uploadAudio } = require('../config/cloudinary');
+const multer = require('multer');
+
+router.post('/upload', authMiddleware, (req, res, next) => {
+  const isAudio = req.headers['x-file-type'] === 'audio';
+  const handler = isAudio ? uploadAudio.single('file') : uploadMedia.single('file');
+  handler(req, res, next);
+}, async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file' });
     res.json({ url: req.file.path });
