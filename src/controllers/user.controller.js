@@ -22,9 +22,10 @@ async function getUserByUsername(req, res) {
 
 async function updateProfile(req, res) {
   try {
-    const { profileFrame, bio, username, profileText, profileBg, profileBgType } = req.body;
+    const { profileFrame, profileFrameUrl, bio, username, profileText, profileBg, profileBgType } = req.body;
     const update = {};
     if (profileFrame) update.profileFrame = profileFrame;
+    if (profileFrameUrl !== undefined) update.profileFrameUrl = profileFrameUrl;
     if (bio !== undefined) update.bio = bio;
     if (username) update.username = username;
     if (profileText !== undefined) update.profileText = profileText;
