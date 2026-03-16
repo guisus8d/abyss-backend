@@ -10,7 +10,7 @@ router.get('/top', authMiddleware, async (req, res) => {
   try {
     const User = require('../models/User');
     const users = await User.find()
-      .select('username avatarUrl xp profileFrame badges')
+      .select('username avatarUrl xp profileFrame profileFrameUrl badges')
       .sort({ xp: -1 })
       .limit(10);
     res.json({ users });
@@ -28,7 +28,7 @@ router.get('/search', authMiddleware, async (req, res) => {
       username: { $regex: q.trim(), $options: 'i' },
       _id: { $ne: req.user._id },
     })
-    .select('username avatarUrl xp badges profileFrame')
+    .select('username avatarUrl xp badges profileFrame profileFrameUrl')
     .limit(10);
     res.json({ users });
   } catch (err) {
@@ -41,7 +41,7 @@ router.get('/random', authMiddleware, async (req, res) => {
     const users = await User.aggregate([
       { $match: { _id: { $ne: require('mongoose').Types.ObjectId.createFromHexString(req.user._id.toString()) }, banned: { $ne: true } } },
       { $sample: { size: 10 } },
-      { $project: { username: 1, avatarUrl: 1, xp: 1, profileFrame: 1 } }
+      { $project: { username: 1, avatarUrl: 1, xp: 1, profileFrame: 1, profileFrameUrl: 1 } }
     ]);
     res.json({ users });
   } catch (err) { res.status(500).json({ error: err.message }); }
