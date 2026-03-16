@@ -16,7 +16,7 @@ router.get('/requests/sent', authMiddleware, async (req, res) => {
     const users = await User.find({
       'chatRequests.from': req.user._id,
       'chatRequests.status': 'pending',
-    }).select('username avatarUrl xp chatRequests');
+    }).select('username avatarUrl xp profileFrame profileFrameUrl chatRequests');
 
     const sent = users.map(u => {
       const req_ = u.chatRequests.find(
@@ -39,7 +39,7 @@ router.get('/requests/sent', authMiddleware, async (req, res) => {
 router.get('/requests/pending', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
-      .populate('chatRequests.from', 'username avatarUrl xp');
+      .populate('chatRequests.from', 'username avatarUrl xp profileFrame profileFrameUrl');
     const pending = (user.chatRequests || []).filter(r => r.status === 'pending');
     res.json({ requests: pending });
   } catch (err) {
@@ -95,7 +95,7 @@ router.patch('/request/:fromId', authMiddleware, async (req, res) => {
           lastMessageText: lastPending?.text || '',
         });
       }
-      await chat.populate('participants', 'username avatarUrl xp');
+      await chat.populate('participants', 'username avatarUrl xp profileFrame profileFrameUrl');
       // Notificar al solicitante que fue aceptado
       await Notification.create({ to: req.params.fromId, from: req.user._id, type: 'chat_accepted' });
       try {
@@ -136,7 +136,7 @@ router.get('/with/:userId', authMiddleware, async (req, res) => {
   try {
     const existing = await Chat.findOne({
       participants: { $all: [req.user._id, req.params.userId] }
-    }).populate('participants', 'username avatarUrl xp');
+    }).populate('participants', 'username avatarUrl xp profileFrame profileFrameUrl');
     if (!existing) return res.status(404).json({ error: 'No tienen chat activo' });
     res.json({ chat: existing });
   } catch (err) {
