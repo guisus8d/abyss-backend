@@ -38,3 +38,21 @@ router.post('/:id/comment', authMiddleware, commentRules, validate, addComment);
 router.delete('/:id',       authMiddleware, deletePost);
 
 module.exports = router;
+
+router.delete('/:id/comment/:commentId', authMiddleware, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+    const comment = post.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ error: 'Comentario no encontrado' });
+    const isMod = ['mod','admin'].includes(req.user.role);
+    const isOwner = comment.user.toString() === req.user._id.toString();
+    if (!isOwner && !isMod) return res.status(403).json({ error: 'Sin permisos' });
+    post.comments = post.comments.filter(c => 
+      c._id.toString() !== req.params.commentId &&
+      c.replyTo?.commentId?.toString() !== req.params.commentId
+    );
+    await post.save();
+    res.json({ comments: post.comments });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
