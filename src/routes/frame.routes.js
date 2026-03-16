@@ -23,7 +23,7 @@ router.get('/', authMiddleware, async (req, res) => {
 router.get('/my', authMiddleware, async (req, res) => {
   try {
     const owned = await FrameOwnership.find({ user: req.user._id, units: { $gt: 0 } })
-      .populate('frame');
+      .populate({ path: 'frame', populate: { path: 'creator', select: 'username avatarUrl' } });
     res.json({ frames: owned });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
