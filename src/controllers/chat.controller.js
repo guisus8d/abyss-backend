@@ -12,11 +12,11 @@ async function getOrCreateChat(req, res) {
 
     let chat = await Chat.findOne({
       participants: { $all: [me, userId], $size: 2 }
-    }).populate('participants', 'username profileFrame xp');
+    }).populate('participants', 'username avatarUrl profileFrame profileFrameUrl xp');
 
     if (!chat) {
       chat = await Chat.create({ participants: [me, userId] });
-      await chat.populate('participants', 'username profileFrame xp');
+      await chat.populate('participants', 'username avatarUrl profileFrame profileFrameUrl xp');
     }
 
     res.json({ chat });
@@ -30,7 +30,7 @@ async function getMyChats(req, res) {
   try {
     const chats = await Chat.find({ participants: req.user._id })
       .sort({ lastMessage: -1 })
-      .populate('participants', 'username avatarUrl profileFrame xp');
+      .populate('participants', 'username avatarUrl profileFrame profileFrameUrl xp');
 
     const result = chats.map(chat => {
       const unread = chat.messages.filter(
