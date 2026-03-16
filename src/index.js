@@ -29,8 +29,8 @@ app.use((req, res, next) => {
 app.set('trust proxy', 1);
 // ── Rate limit global: 100 req / 15min por IP ─
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
+  windowMs: 1 * 60 * 1000,
+  max: 1000,
   message: { error: 'Demasiadas peticiones, espera un momento' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -39,8 +39,8 @@ app.use('/api', globalLimiter);
 
 // ── Rate limit estricto para auth ─────────────
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
+  windowMs: 1 * 60 * 1000,
+  max: 100,
   message: { error: 'Demasiados intentos, espera 15 minutos' },
 });
 app.use('/api/auth', authLimiter);
