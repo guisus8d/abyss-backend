@@ -22,14 +22,16 @@ router.get('/requests/sent', authMiddleware, async (req, res) => {
       const req_ = u.chatRequests.find(
         r => r.from.toString() === req.user._id.toString() && r.status === 'pending'
       );
+      if (!req_) return null;
       return {
         _id: req_._id,
-        to: { _id: u._id, username: u.username, avatarUrl: u.avatarUrl, xp: u.xp },
+        to: { _id: u._id, username: u.username, avatarUrl: u.avatarUrl, xp: u.xp,
+              profileFrame: u.profileFrame, profileFrameUrl: u.profileFrameUrl },
         messages: req_.messages || [],
         createdAt: req_.createdAt,
       };
     });
-    res.json({ sent });
+    res.json({ sent: sent.filter(Boolean) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
