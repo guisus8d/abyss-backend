@@ -28,6 +28,16 @@ router.get('/my', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Obtener marco por ID
+router.get('/:id', authMiddleware, async (req, res) => {
+  try {
+    const frame = await Frame.findById(req.params.id)
+      .populate('creator', 'username avatarUrl');
+    if (!frame) return res.status(404).json({ error: 'Marco no encontrado' });
+    res.json({ frame });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Crear marco (requiere 200 XP y 50 monedas)
 router.post('/', authMiddleware, uploadFrame.single('image'), async (req, res) => {
   try {
