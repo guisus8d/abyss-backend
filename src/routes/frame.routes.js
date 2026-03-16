@@ -52,10 +52,12 @@ router.post('/', authMiddleware, uploadFrame.single('image'), async (req, res) =
     });
 
     // Descontar monedas y dar 5 unidades al creador
-    user.coins -= CREATE_COST;
+    const pkgUnits = parseInt(req.body.units) || CREATE_UNITS;
+    const pkgCost  = parseInt(req.body.cost)  || CREATE_COST;
+    if (user.coins < pkgCost) return res.status(403).json({ error: 'Monedas insuficientes' });
+    user.coins -= pkgCost;
     await user.save();
-
-    await FrameOwnership.create({ user: user._id, frame: frame._id, units: CREATE_UNITS });
+    await FrameOwnership.create({ user: user._id, frame: frame._id, units: pkgUnits });
 
     res.status(201).json({ frame, newCoins: user.coins });
   } catch (err) { res.status(500).json({ error: err.message }); }
