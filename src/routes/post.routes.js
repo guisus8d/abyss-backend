@@ -53,7 +53,7 @@ router.delete('/:id/comment/:commentId', authMiddleware, async (req, res) => {
       c.replyTo?.commentId?.toString() !== req.params.commentId
     );
     await post.save();
-    await post.populate("comments.user", "username avatarUrl");
+    await post.populate("comments.user", "username avatarUrl profileFrame profileFrameUrl");
     res.json({ comments: post.comments });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
