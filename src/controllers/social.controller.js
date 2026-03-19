@@ -73,7 +73,7 @@ async function blockUser(req, res) {
 async function getFollowers(req, res) {
   try {
     const user = await User.findOne({ username: req.params.username })
-      .populate('followers', 'username xp badges profileFrame');
+      .populate('followers', 'username xp badges profileFrame profileFrameUrl');
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.json({ followers: user.followers, count: user.followers.length });
   } catch (err) {
@@ -85,7 +85,7 @@ async function getFollowers(req, res) {
 async function getFollowing(req, res) {
   try {
     const user = await User.findOne({ username: req.params.username })
-      .populate('following', 'username xp badges profileFrame');
+      .populate('following', 'username xp badges profileFrame profileFrameUrl');
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.json({ following: user.following, count: user.following.length });
   } catch (err) {
@@ -107,7 +107,7 @@ async function getFollowingFeed(req, res) {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate('author', 'username profileFrame xp')
+      .populate('author', 'username profileFrame profileFrameUrl xp avatarUrl')
       .populate('comments.user', 'username');
 
     res.json({ posts, page });
