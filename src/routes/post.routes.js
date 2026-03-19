@@ -16,7 +16,7 @@ router.get('/user/me',      authMiddleware, async (req, res) => {
   try {
     const posts = await Post.find({ author: req.user._id })
       .sort({ createdAt: -1 })
-      .populate('author', 'username avatarUrl xp profileFrame')
+      .populate('author', 'username avatarUrl xp profileFrame profileFrameUrl')
       .lean();
     res.json({ posts });
   } catch { res.status(500).json({ error: 'Error al obtener posts' }); }
@@ -27,7 +27,7 @@ router.get('/user/:username', authMiddleware, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
     const posts = await Post.find({ author: user._id })
       .sort({ createdAt: -1 })
-      .populate('author', 'username avatarUrl xp profileFrame')
+      .populate('author', 'username avatarUrl xp profileFrame profileFrameUrl')
       .lean();
     res.json({ posts });
   } catch { res.status(500).json({ error: 'Error al obtener posts' }); }

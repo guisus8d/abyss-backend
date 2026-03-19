@@ -25,7 +25,7 @@ async function createPost(req, res) {
     }
 
     const post = await Post.create(postData);
-    await post.populate('author', '_id username profileFrame xp avatarUrl');
+    await post.populate('author', '_id username profileFrame profileFrameUrl xp avatarUrl');
 
     await User.findByIdAndUpdate(req.user._id, { $inc: { xp: 10 } });
     const newBadges = await checkAndAwardBadges(req.user._id);
@@ -47,7 +47,7 @@ async function getPosts(req, res) {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate('author', '_id username profileFrame xp avatarUrl')
+      .populate('author', '_id username profileFrame profileFrameUrl xp avatarUrl')
       .populate('comments.user', 'username avatarUrl profileFrame profileFrameUrl');
 
     const total = await Post.countDocuments();
@@ -60,7 +60,7 @@ async function getPosts(req, res) {
 async function getPost(req, res) {
   try {
     const post = await Post.findById(req.params.id)
-      .populate('author', '_id username profileFrame xp avatarUrl')
+      .populate('author', '_id username profileFrame profileFrameUrl xp avatarUrl')
       .populate('comments.user', 'username avatarUrl profileFrame profileFrameUrl');
     if (!post) return res.status(404).json({ error: 'Post no encontrado' });
     res.json({ post });
