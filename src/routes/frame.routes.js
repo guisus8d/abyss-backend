@@ -13,7 +13,7 @@ const CREATE_UNITS = 5;
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const frames = await Frame.find({ status: 'active' })
-      .populate('creator', 'username avatarUrl')
+      .populate('creator', 'username avatarUrl profileFrame profileFrameUrl')
       .sort({ createdAt: -1 });
     res.json({ frames });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -23,7 +23,7 @@ router.get('/', authMiddleware, async (req, res) => {
 router.get('/my', authMiddleware, async (req, res) => {
   try {
     const owned = await FrameOwnership.find({ user: req.user._id, units: { $gt: 0 } })
-      .populate({ path: 'frame', populate: { path: 'creator', select: 'username avatarUrl' } });
+      .populate({ path: 'frame', populate: { path: 'creator', select: 'username avatarUrl profileFrame profileFrameUrl' } });
     res.json({ frames: owned });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -32,7 +32,7 @@ router.get('/my', authMiddleware, async (req, res) => {
 router.get('/:id', authMiddleware, async (req, res) => {
   try {
     const frame = await Frame.findById(req.params.id)
-      .populate('creator', 'username avatarUrl');
+      .populate('creator', 'username avatarUrl profileFrame profileFrameUrl');
     if (!frame) return res.status(404).json({ error: 'Marco no encontrado' });
     res.json({ frame });
   } catch (err) { res.status(500).json({ error: err.message }); }
