@@ -22,7 +22,7 @@ async function getUserByUsername(req, res) {
 
 async function updateProfile(req, res) {
   try {
-    const { profileFrame, profileFrameUrl, bio, username, profileText, profileBg, profileBgType } = req.body;
+    const { profileFrame, profileFrameUrl, bio, username, profileText, profileBg, profileBgType, profileBanner, profileBannerType } = req.body;
     const update = {};
     if (profileFrame) update.profileFrame = profileFrame;
     if (profileFrameUrl !== undefined) update.profileFrameUrl = profileFrameUrl;
@@ -31,6 +31,8 @@ async function updateProfile(req, res) {
     if (profileText !== undefined) update.profileText = profileText;
     if (profileBg !== undefined) update.profileBg = profileBg;
     if (profileBgType) update.profileBgType = profileBgType;
+    if (profileBanner !== undefined) update.profileBanner = profileBanner;
+    if (profileBannerType) update.profileBannerType = profileBannerType;
     if (req.body.profileBlocks !== undefined) update.profileBlocks = req.body.profileBlocks;
     if (req.body.profilePrefs !== undefined) update.profilePrefs = req.body.profilePrefs;
     const user = await User.findByIdAndUpdate(req.user._id, { $set: update }, { new: true }).populate('badges');
