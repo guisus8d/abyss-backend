@@ -122,6 +122,20 @@ router.post('/mod/setrole/:userId', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+
+// Subir imagen de banner (fondo del hero)
+router.post('/me/banner', authMiddleware, uploadAvatar.single('banner'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Imagen requerida' });
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { profileBanner: req.file.path, profileBannerType: 'image' },
+      { new: true }
+    );
+    res.json({ bannerUrl: req.file.path, user });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 module.exports = router;
 
 router.delete('/me', authMiddleware, async (req, res) => {

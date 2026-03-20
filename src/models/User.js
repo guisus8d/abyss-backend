@@ -9,6 +9,8 @@ const userSchema = new mongoose.Schema({
   gender:         { type: String, enum: ['hombre', 'mujer', 'no-binario', 'prefiero-no-decir'], default: 'prefiero-no-decir' },
   bio:            { type: String, default: '' },
   profileText:    { type: String, default: '' },
+  profileBanner:    { type: String, default: '' },
+  profileBannerType:{ type: String, default: 'color' },
   profileBg:      { type: String, default: '' },
   profileBgType:  { type: String, default: 'color' },
   profileBlocks:  { type: Array,  default: [] },
