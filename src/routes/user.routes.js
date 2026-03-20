@@ -124,7 +124,7 @@ router.post('/mod/setrole/:userId', authMiddleware, async (req, res) => {
 
 
 // Subir imagen de banner (fondo del hero)
-router.post('/me/banner', authMiddleware, uploadAvatar.single('banner'), async (req, res) => {
+router.post('/me/banner', authMiddleware, uploadMiddleware.single('banner'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Imagen requerida' });
     const user = await User.findByIdAndUpdate(
