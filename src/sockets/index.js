@@ -125,6 +125,20 @@ function initSockets(server) {
         };
 
         group.messages.push(message);
+
+        // Actualizar lastMessage y lastMessageText
+        group.lastMessage     = message.createdAt;
+        group.lastMessageText = text.trim();
+
+        // Incrementar unreadCounts para todos los miembros menos el sender
+        group.members.forEach(m => {
+          const uid = m.user.toString();
+          if (uid !== socket.userId.toString()) {
+            const cur = group.unreadCounts?.get(uid) || 0;
+            group.unreadCounts.set(uid, cur + 1);
+          }
+        });
+        group.markModified('unreadCounts');
         await group.save();
 
         // Populate del sender para incluir avatar, frame, etc.
@@ -137,7 +151,7 @@ function initSockets(server) {
 
         const populated = group.messages[group.messages.length - 1];
 
-        // Emitir a todos en el room (incluye al emisor)
+        // Emitir el mensaje a todos en el room (incluye al emisor)
         io.to(`group:${groupId}`).emit('group:message', {
           groupId,
           message: {
@@ -146,6 +160,14 @@ function initSockets(server) {
             createdAt: saved.createdAt,
             sender:    populated.sender,
           },
+        });
+
+        // Notificar a miembros fuera del room para que recarguen la lista
+        group.members.forEach(m => {
+          const uid = m.user.toString();
+          if (uid !== socket.userId.toString()) {
+            io.to(`user:${uid}`).emit('group:notification', { groupId });
+          }
         });
       } catch (err) {
         console.error('group:message error:', err.message);
