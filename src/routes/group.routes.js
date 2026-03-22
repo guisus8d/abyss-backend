@@ -25,9 +25,16 @@ router.post('/', authMiddleware, uploadAvatar.single('image'), async (req, res) 
     const validIds = [...(me.followers || []).map(String), ...(me.following || []).map(String)];
     const parsedIds = JSON.parse(memberIds || '[]').filter(id => validIds.includes(String(id)));
 
+    // Separar mutuos de solo-seguidores
+    const meUser = await User.findById(req.user._id);
+    const followerIds = (meUser.followers || []).map(String);
+    const followingIds = (meUser.following || []).map(String);
+    const mutualIds = parsedIds.filter(id => followerIds.includes(String(id)) && followingIds.includes(String(id)));
+    const nonMutualIds = parsedIds.filter(id => !mutualIds.includes(id));
+
     const members = [
       { user: req.user._id, role: 'admin' },
-      ...parsedIds.map(id => ({ user: id, role: 'member' })),
+      ...mutualIds.map(id => ({ user: id, role: 'member' })),
     ];
 
     const group = await Group.create({
@@ -38,6 +45,23 @@ router.post('/', authMiddleware, uploadAvatar.single('image'), async (req, res) 
       creator: req.user._id,
       members,
     });
+
+    // Agregar invitaciones pendientes para no-mutuos
+    if (nonMutualIds.length > 0) {
+      group.pendingInvites = nonMutualIds;
+      await group.save();
+      // Crear notificación para cada no-mutuo
+      const Notification = require('../models/Notification');
+      for (const uid of nonMutualIds) {
+        await Notification.create({
+          to: uid,
+          from: req.user._id,
+          type: 'group_invite',
+          groupId: group._id,
+          groupName: group.name,
+        }).catch(() => {});
+      }
+    }
 
     await group.populate('members.user', 'username avatarUrl profileFrame profileFrameUrl');
     res.json({ group });
