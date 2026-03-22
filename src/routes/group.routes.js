@@ -132,18 +132,32 @@ router.post('/:id/ban/:userId', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Borrar mensaje (solo admin)
+// Borrar mensaje
+// ?forAll=true → borra para todos (solo admin)
+// sin param   → borra solo para mí (cualquier miembro sobre su propio mensaje o cualquiera)
 router.delete('/:id/message/:msgId', authMiddleware, async (req, res) => {
   try {
     const group = await Group.findById(req.params.id);
+    if (!group) return res.status(404).json({ error: 'Grupo no encontrado' });
     const isAdmin = group.members.some(m => m.user.toString() === req.user._id.toString() && m.role === 'admin');
     const msg = group.messages.id(req.params.msgId);
     if (!msg) return res.status(404).json({ error: 'Mensaje no encontrado' });
     const isOwner = msg.sender.toString() === req.user._id.toString();
-    if (!isAdmin && !isOwner) return res.status(403).json({ error: 'Sin permisos' });
-    group.messages = group.messages.filter(m => m._id.toString() !== req.params.msgId);
+    const forAll = req.query.forAll === 'true';
+
+    if (forAll) {
+      // Borrar para todos — solo admin o dueño del mensaje
+      if (!isAdmin && !isOwner) return res.status(403).json({ error: 'Sin permisos' });
+      group.messages = group.messages.filter(m => m._id.toString() !== req.params.msgId);
+    } else {
+      // Borrar solo para mí — cualquier miembro
+      if (!msg.deletedFor) msg.deletedFor = [];
+      if (!msg.deletedFor.map(d => d.toString()).includes(req.user._id.toString())) {
+        msg.deletedFor.push(req.user._id);
+      }
+    }
     await group.save();
-    res.json({ ok: true });
+    res.json({ ok: true, forAll });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

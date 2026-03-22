@@ -106,7 +106,7 @@ function initSockets(server) {
     socket.on('group:join',  ({ groupId }) => socket.join(`group:${groupId}`));
     socket.on('group:leave', ({ groupId }) => socket.leave(`group:${groupId}`));
 
-    socket.on('group:message', async ({ groupId, text, type, mediaUrl, audioDuration }) => {
+    socket.on('group:message', async ({ groupId, text, type, mediaUrl, audioDuration, replyTo }) => {
       try {
         if (!text?.trim() && !mediaUrl) return;
 
@@ -125,6 +125,7 @@ function initSockets(server) {
           mediaUrl:      mediaUrl || null,
           audioDuration: audioDuration || null,
           createdAt:     new Date(),
+          ...(replyTo ? { replyTo } : {}),
         };
 
         group.messages.push(message);
@@ -163,6 +164,7 @@ function initSockets(server) {
             type:         saved.type,
             mediaUrl:     saved.mediaUrl,
             audioDuration: saved.audioDuration,
+            replyTo:      saved.replyTo,
             createdAt:    saved.createdAt,
             sender:       populated.sender,
           },
