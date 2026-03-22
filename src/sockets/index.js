@@ -1,13 +1,14 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const Chat = require('../models/Chat');
+const Group = require('../models/Group');
 const Notification = require('../models/Notification');
 
 function initSockets(server) {
   const io = new Server(server, { cors: { origin: '*' } });
-  _io = io;  // guardar referencia real al io
+  _io = io;
 
-  // Autenticar por token
+  // ── Auth middleware ──────────────────────────────────────────────────────────
   io.use((socket, next) => {
     try {
       const token = socket.handshake.auth?.token;
@@ -23,37 +24,25 @@ function initSockets(server) {
   io.on('connection', (socket) => {
     console.log(`🔌 Conectado: ${socket.userId}`);
 
-    // Unirse a sala personal (para recibir mensajes)
+    // Sala personal (notificaciones, etc.)
     socket.join(`user:${socket.userId}`);
 
-    // Unirse a sala de chat
-    socket.on('chat:join', ({ chatId }) => {
-      socket.join(`chat:${chatId}`);
-    });
+    // ── Chats privados ───────────────────────────────────────────────────────
+    socket.on('chat:join',  ({ chatId }) => socket.join(`chat:${chatId}`));
+    socket.on('chat:leave', ({ chatId }) => socket.leave(`chat:${chatId}`));
 
-    // Salir de sala
-    socket.on('chat:leave', ({ chatId }) => {
-      socket.leave(`chat:${chatId}`);
-    });
-
-    // Enviar mensaje
-    // Marcar mensajes como leídos en tiempo real
     socket.on('chat:read', async ({ chatId }) => {
       try {
         const chat = await Chat.findOne({ _id: chatId, participants: socket.userId });
         if (!chat) return;
-        let changed = false;
         chat.messages.forEach(m => {
           if (!m.readBy.map(r => r.toString()).includes(socket.userId.toString())) {
             m.readBy.push(socket.userId);
-            changed = true;
           }
         });
-        // Resetear contador de no leídos
         chat.unreadCounts.set(socket.userId.toString(), 0);
         chat.markModified('unreadCounts');
         await chat.save();
-        // Avisar a los otros participantes que se leyó
         chat.participants.forEach(p => {
           if (p.toString() !== socket.userId.toString()) {
             io.to(`user:${p}`).emit('chat:read_ack', { chatId, readBy: socket.userId });
@@ -64,10 +53,7 @@ function initSockets(server) {
 
     socket.on('chat:send', async ({ chatId, text, replyTo, type, mediaUrl }) => {
       try {
-        const chat = await Chat.findOne({
-          _id: chatId,
-          participants: socket.userId,
-        });
+        const chat = await Chat.findOne({ _id: chatId, participants: socket.userId });
         if (!chat) return;
 
         const message = {
@@ -82,8 +68,11 @@ function initSockets(server) {
 
         chat.messages.push(message);
         chat.lastMessage = new Date();
-        chat.lastMessageText = type === 'image' ? '[Imagen]' : type === 'audio' ? '[Audio]' : text?.trim() || '';
-        // Incrementar unread para todos menos el sender
+        chat.lastMessageText =
+          type === 'image' ? '[Imagen]' :
+          type === 'audio' ? '[Audio]' :
+          text?.trim() || '';
+
         chat.participants.forEach(p => {
           if (p.toString() !== socket.userId.toString()) {
             const cur = chat.unreadCounts?.get(p.toString()) || 0;
@@ -94,31 +83,73 @@ function initSockets(server) {
         await chat.save();
 
         const saved = chat.messages[chat.messages.length - 1];
-
-        // Emitir a todos en la sala del chat
         io.to(`chat:${chatId}`).emit('chat:message', {
           chatId,
-          message: { ...saved.toObject(), sender: { _id: socket.userId } }
+          message: { ...saved.toObject(), sender: { _id: socket.userId } },
         });
 
-        // Notificar a participantes fuera de la sala
         chat.participants.forEach(p => {
           if (p.toString() !== socket.userId) {
             io.to(`user:${p}`).emit('chat:notification', { chatId });
           }
         });
-
       } catch (err) {
-        console.error('Socket error:', err.message);
+        console.error('chat:send error:', err.message);
       }
     });
 
-    // Typing indicator
     socket.on('chat:typing', ({ chatId, isTyping }) => {
-      socket.to(`chat:${chatId}`).emit('chat:typing', {
-        userId: socket.userId,
-        isTyping,
-      });
+      socket.to(`chat:${chatId}`).emit('chat:typing', { userId: socket.userId, isTyping });
+    });
+
+    // ── Grupos ───────────────────────────────────────────────────────────────
+    socket.on('group:join',  ({ groupId }) => socket.join(`group:${groupId}`));
+    socket.on('group:leave', ({ groupId }) => socket.leave(`group:${groupId}`));
+
+    socket.on('group:message', async ({ groupId, text }) => {
+      try {
+        if (!text?.trim()) return;
+
+        // Verificar que el usuario es miembro activo del grupo
+        const group = await Group.findOne({
+          _id: groupId,
+          'members.user': socket.userId,
+          bannedUsers: { $ne: socket.userId },
+        });
+        if (!group) return;
+
+        const message = {
+          sender:    socket.userId,
+          text:      text.trim(),
+          createdAt: new Date(),
+        };
+
+        group.messages.push(message);
+        await group.save();
+
+        // Populate del sender para incluir avatar, frame, etc.
+        const saved = group.messages[group.messages.length - 1];
+        await Group.populate(group, {
+          path:   'messages.sender',
+          select: 'username avatarUrl profileFrame profileFrameUrl',
+          match:  { _id: socket.userId },
+        });
+
+        const populated = group.messages[group.messages.length - 1];
+
+        // Emitir a todos en el room (incluye al emisor)
+        io.to(`group:${groupId}`).emit('group:message', {
+          groupId,
+          message: {
+            _id:       saved._id,
+            text:      saved.text,
+            createdAt: saved.createdAt,
+            sender:    populated.sender,
+          },
+        });
+      } catch (err) {
+        console.error('group:message error:', err.message);
+      }
     });
 
     socket.on('disconnect', () => {
