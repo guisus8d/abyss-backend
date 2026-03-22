@@ -4,7 +4,10 @@ const User = require('../models/User');
 const { cloudinary } = require('../config/cloudinary');
 
 async function getProfile(req, res) {
-  const user = await User.findById(req.user._id).populate('badges');
+  const user = await User.findById(req.user._id)
+    .populate('badges')
+    .populate('followers', 'username avatarUrl profileFrame profileFrameUrl')
+    .populate('following', 'username avatarUrl profileFrame profileFrameUrl');
   res.json({ user });
 }
 
