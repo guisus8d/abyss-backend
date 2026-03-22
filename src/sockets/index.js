@@ -106,9 +106,9 @@ function initSockets(server) {
     socket.on('group:join',  ({ groupId }) => socket.join(`group:${groupId}`));
     socket.on('group:leave', ({ groupId }) => socket.leave(`group:${groupId}`));
 
-    socket.on('group:message', async ({ groupId, text }) => {
+    socket.on('group:message', async ({ groupId, text, type, mediaUrl, audioDuration }) => {
       try {
-        if (!text?.trim()) return;
+        if (!text?.trim() && !mediaUrl) return;
 
         // Verificar que el usuario es miembro activo del grupo
         const group = await Group.findOne({
@@ -119,16 +119,19 @@ function initSockets(server) {
         if (!group) return;
 
         const message = {
-          sender:    socket.userId,
-          text:      text.trim(),
-          createdAt: new Date(),
+          sender:        socket.userId,
+          text:          text?.trim() || '',
+          type:          type || 'text',
+          mediaUrl:      mediaUrl || null,
+          audioDuration: audioDuration || null,
+          createdAt:     new Date(),
         };
 
         group.messages.push(message);
 
         // Actualizar lastMessage y lastMessageText
         group.lastMessage     = message.createdAt;
-        group.lastMessageText = text.trim();
+        group.lastMessageText = type === 'image' ? '[Imagen]' : type === 'audio' ? '[Audio]' : text?.trim() || '';
 
         // Incrementar unreadCounts para todos los miembros menos el sender
         group.members.forEach(m => {
@@ -155,10 +158,13 @@ function initSockets(server) {
         io.to(`group:${groupId}`).emit('group:message', {
           groupId,
           message: {
-            _id:       saved._id,
-            text:      saved.text,
-            createdAt: saved.createdAt,
-            sender:    populated.sender,
+            _id:          saved._id,
+            text:         saved.text,
+            type:         saved.type,
+            mediaUrl:     saved.mediaUrl,
+            audioDuration: saved.audioDuration,
+            createdAt:    saved.createdAt,
+            sender:       populated.sender,
           },
         });
 
