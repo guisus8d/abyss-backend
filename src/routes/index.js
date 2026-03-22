@@ -6,4 +6,5 @@ router.use('/posts',  require('./post.routes'));
 router.use('/chats',  require('./chat.routes'));
 router.use('/social', require('./social.routes'));
 router.use('/notifications', require('./notification.routes'));
+router.use('/groups', require('./group.routes'));
 module.exports = router;
