@@ -1,21 +1,31 @@
 const mongoose = require('mongoose');
 
 const messageReactionSchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  user:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   emoji: { type: String },
 }, { _id: false });
 
 const messageSchema = new mongoose.Schema({
   sender:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  text:      { type: String, default: "", maxlength: 2000 },
-  type:      { type: String, default: "text", enum: ["text","image","audio"] },
+  text:      { type: String, default: '', maxlength: 2000 },
+  type:      { type: String, default: 'text', enum: ['text', 'image', 'audio', 'shared_post'] },
   mediaUrl:  { type: String, default: null },
   readBy:    [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   reactions: [messageReactionSchema],
-  replyTo:   {
-    messageId: { type: mongoose.Schema.Types.ObjectId },
-    text:      { type: String },
+  replyTo: {
+    messageId:      { type: mongoose.Schema.Types.ObjectId },
+    text:           { type: String },
     senderUsername: { type: String },
+  },
+  // ── Post compartido ──────────────────────────────────────────────────────
+  sharedPost: {
+    postId:          { type: mongoose.Schema.Types.ObjectId, ref: 'Post' },
+    title:           { type: String, default: '' },
+    content:         { type: String, default: '' },
+    imageUrl:        { type: String, default: null },
+    authorUsername:  { type: String, default: '' },
+    authorAvatarUrl: { type: String, default: null },
+    postType:        { type: String, default: 'quick' },
   },
   deletedFor: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 }, { timestamps: true });
