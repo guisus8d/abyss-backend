@@ -1,18 +1,25 @@
 const router = require('express').Router();
-const { authMiddleware } = require('../middlewares/auth');
-const { postRules, commentRules } = require('../middlewares/rules');
-const { validate } = require('../middlewares/validate');
-const { uploadPost } = require('../config/cloudinary');
-const Post = require('../models/Post');
-const User = require('../models/User');
+const { authMiddleware }            = require('../middlewares/auth');
+const { postRules, commentRules }   = require('../middlewares/rules');
+const { validate }                  = require('../middlewares/validate');
+const { uploadPost }                = require('../config/cloudinary');
+const Post                          = require('../models/Post');
+const User                          = require('../models/User');
 const {
-  createPost, getPosts, getPost,
-  reactPost, addComment, deletePost
+  createPost, getPosts, getFollowingPosts, getTrendingPosts,
+  getPost, reactPost, addComment, deletePost,
 } = require('../controllers/post.controller');
 
-router.get('/',             authMiddleware, getPosts);
-router.post('/',            authMiddleware, uploadPost.single('image'), createPost);
-router.get('/user/me',      authMiddleware, async (req, res) => {
+// ── Feed principal ────────────────────────────────────────────────────────────
+router.get('/',           authMiddleware, getPosts);
+router.post('/',          authMiddleware, uploadPost.single('image'), createPost);
+
+// ── Feeds especializados — ANTES de /:id para evitar conflictos ───────────────
+router.get('/following',  authMiddleware, getFollowingPosts);
+router.get('/trending',   authMiddleware, getTrendingPosts);
+
+// ── Posts del usuario autenticado ─────────────────────────────────────────────
+router.get('/user/me',    authMiddleware, async (req, res) => {
   try {
     const posts = await Post.find({ author: req.user._id })
       .sort({ createdAt: -1 })
@@ -21,6 +28,8 @@ router.get('/user/me',      authMiddleware, async (req, res) => {
     res.json({ posts });
   } catch { res.status(500).json({ error: 'Error al obtener posts' }); }
 });
+
+// ── Posts de un usuario por username ─────────────────────────────────────────
 router.get('/user/:username', authMiddleware, async (req, res) => {
   try {
     const user = await User.findOne({ username: req.params.username }).lean();
@@ -32,28 +41,35 @@ router.get('/user/:username', authMiddleware, async (req, res) => {
     res.json({ posts });
   } catch { res.status(500).json({ error: 'Error al obtener posts' }); }
 });
+
+// ── CRUD individual ───────────────────────────────────────────────────────────
 router.get('/:id',          authMiddleware, getPost);
 router.post('/:id/react',   authMiddleware, reactPost);
 router.post('/:id/comment', authMiddleware, commentRules, validate, addComment);
 router.delete('/:id',       authMiddleware, deletePost);
 
-module.exports = router;
-
 router.delete('/:id/comment/:commentId', authMiddleware, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+
     const comment = post.comments.id(req.params.commentId);
     if (!comment) return res.status(404).json({ error: 'Comentario no encontrado' });
-    const isMod = ['mod','admin'].includes(req.user.role);
-    const isOwner = comment.user.toString() === req.user._id.toString();
+
+    const isMod    = ['mod', 'admin'].includes(req.user.role);
+    const isOwner  = comment.user.toString() === req.user._id.toString();
     if (!isOwner && !isMod) return res.status(403).json({ error: 'Sin permisos' });
-    post.comments = post.comments.filter(c => 
-      c._id.toString() !== req.params.commentId &&
-      c.replyTo?.commentId?.toString() !== req.params.commentId
+
+    post.comments = post.comments.filter(
+      c =>
+        c._id.toString() !== req.params.commentId &&
+        c.replyTo?.commentId?.toString() !== req.params.commentId
     );
+
     await post.save();
-    await post.populate("comments.user", "username avatarUrl profileFrame profileFrameUrl");
+    await post.populate('comments.user', 'username avatarUrl profileFrame profileFrameUrl');
     res.json({ comments: post.comments });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+module.exports = router;

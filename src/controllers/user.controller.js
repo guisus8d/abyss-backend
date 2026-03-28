@@ -25,8 +25,17 @@ async function getUserByUsername(req, res) {
 
 async function updateProfile(req, res) {
   try {
-    const { profileFrame, profileFrameUrl, bio, username, profileText, profileBg, profileBgType, profileBanner, profileBannerType } = req.body;
+    const {
+      displayName,
+      profileFrame, profileFrameUrl,
+      bio, username, profileText,
+      profileBg, profileBgType,
+      profileBanner, profileBannerType
+    } = req.body;
+
     const update = {};
+
+    if (displayName !== undefined) update.displayName = displayName; // ← NUEVO
     if (profileFrame) update.profileFrame = profileFrame;
     if (profileFrameUrl !== undefined) update.profileFrameUrl = profileFrameUrl;
     if (bio !== undefined) update.bio = bio;
@@ -38,7 +47,13 @@ async function updateProfile(req, res) {
     if (profileBannerType) update.profileBannerType = profileBannerType;
     if (req.body.profileBlocks !== undefined) update.profileBlocks = req.body.profileBlocks;
     if (req.body.profilePrefs !== undefined) update.profilePrefs = req.body.profilePrefs;
-    const user = await User.findByIdAndUpdate(req.user._id, { $set: update }, { new: true }).populate('badges');
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { $set: update },
+      { new: true }
+    ).populate('badges');
+
     res.json({ user });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -47,16 +62,11 @@ async function updateProfile(req, res) {
 
 async function uploadAvatar(req, res) {
   try {
-    // multer-storage-cloudinary ya subió el archivo — solo leer req.file
     if (!req.file) return res.status(400).json({ error: 'No se recibió imagen' });
-
-    // Borrar avatar anterior si existe
     const currentUser = await User.findById(req.user._id);
     if (currentUser.avatarPublicId) {
       await cloudinary.uploader.destroy(currentUser.avatarPublicId);
     }
-
-    // req.file.path = secure_url, req.file.filename = public_id
     const user = await User.findByIdAndUpdate(
       req.user._id,
       {
@@ -65,7 +75,6 @@ async function uploadAvatar(req, res) {
       },
       { new: true }
     ).populate('badges');
-
     res.json({ user, avatarUrl: req.file.path });
   } catch (err) {
     console.error('uploadAvatar error:', err.message);
