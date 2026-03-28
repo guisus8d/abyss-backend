@@ -150,7 +150,7 @@ router.post('/:id/share-post', authMiddleware, async (req, res) => {
 
     group.messages.push(newMsg);
     group.lastMessage     = new Date();
-    group.lastMessageText = '📎 Post compartido';
+    group.lastMessageText = 'Post compartido';
 
     // Incrementar unread para todos menos el sender
     group.members.forEach(m => {
