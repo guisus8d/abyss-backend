@@ -27,20 +27,64 @@ function initSockets(server) {
     socket.on('chat:join',  ({ chatId }) => socket.join(`chat:${chatId}`));
     socket.on('chat:leave', ({ chatId }) => socket.leave(`chat:${chatId}`));
 
+    // ✅ FIX: en vez de findOne (carga todos los mensajes) + forEach + save,
+    // usamos updateOne con $set directo en MongoDB.
+    // Esto es una sola operación atómica — no carga ningún mensaje al servidor.
     socket.on('chat:read', async ({ chatId }) => {
       try {
-        const chat = await Chat.findOne({ _id: chatId, participants: socket.userId });
-        if (!chat) return;
-        chat.messages.forEach(m => {
-          if (!m.readBy.map(r => r.toString()).includes(socket.userId.toString())) {
-            m.readBy.push(socket.userId);
-          }
-        });
-        chat.unreadCounts.set(socket.userId.toString(), 0);
-        chat.markModified('unreadCounts');
-        await chat.save();
-        chat.participants.forEach(p => {
-          if (p.toString() !== socket.userId.toString()) {
+        // Verificar que el usuario es participante sin cargar los mensajes
+        const isMember = await Chat.exists({ _id: chatId, participants: socket.userId });
+        if (!isMember) return;
+
+        const userIdStr = socket.userId.toString();
+
+        // Marcar como leídos solo los mensajes donde readBy NO contiene al usuario
+        // y agregar su ID al array — sin cargar ni un solo mensaje en memoria
+        await Chat.updateOne(
+          { _id: chatId },
+          [
+            {
+              $set: {
+                messages: {
+                  $map: {
+                    input: '$messages',
+                    as:    'msg',
+                    in: {
+                      $mergeObjects: [
+                        '$$msg',
+                        {
+                          readBy: {
+                            $cond: {
+                              if: {
+                                $in: [
+                                  { $toObjectId: userIdStr },
+                                  '$$msg.readBy',
+                                ],
+                              },
+                              then: '$$msg.readBy',
+                              else: {
+                                $concatArrays: [
+                                  '$$msg.readBy',
+                                  [{ $toObjectId: userIdStr }],
+                                ],
+                              },
+                            },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                },
+                [`unreadCounts.${userIdStr}`]: 0,
+              },
+            },
+          ]
+        );
+
+        // Notificar al otro participante que leyó
+        const chat = await Chat.findById(chatId).select('participants').lean();
+        chat?.participants?.forEach(p => {
+          if (p.toString() !== userIdStr) {
             io.to(`user:${p}`).emit('chat:read_ack', { chatId, readBy: socket.userId });
           }
         });
@@ -81,7 +125,6 @@ function initSockets(server) {
 
         const saved = chat.messages[chat.messages.length - 1];
 
-        // Populate del sender — igual que en grupos, manda objeto completo
         await Chat.populate(chat, {
           path:   'messages.sender',
           select: 'username avatarUrl profileFrame profileFrameUrl',
