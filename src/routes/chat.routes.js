@@ -185,7 +185,7 @@ router.post('/:chatId/share-post', authMiddleware, async (req, res) => {
 
     chat.messages.push(newMessage);
     chat.lastMessage     = new Date();
-    chat.lastMessageText = `📎 Post de @${authorUsername}`;
+    chat.lastMessageText = `Post de @${authorUsername}`;
     await chat.save();
 
     const saved = chat.messages[chat.messages.length - 1];
