@@ -3,13 +3,22 @@ const mongoose = require('mongoose');
 const messageSchema = new mongoose.Schema({
   sender:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   text:     { type: String, default: '', maxlength: 2000 },
-  type:     { type: String, default: 'text', enum: ['text', 'image', 'audio'] },
+  type:     { type: String, default: 'text', enum: ['text', 'image', 'audio', 'shared_post'] },
   mediaUrl:      { type: String, default: null },
   audioDuration: { type: Number, default: null },
   replyTo:  {
     messageId:      { type: mongoose.Schema.Types.ObjectId },
     text:           { type: String },
     senderUsername: { type: String },
+  },
+  sharedPost: {
+    postId:          { type: String, default: null },
+    title:           { type: String, default: '' },
+    content:         { type: String, default: '' },
+    imageUrl:        { type: String, default: null },
+    authorUsername:  { type: String, default: '' },
+    authorAvatarUrl: { type: String, default: null },
+    postType:        { type: String, default: 'quick' },
   },
   deletedFor: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   reactions:  [{ user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, emoji: String }],

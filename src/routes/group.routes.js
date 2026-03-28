@@ -50,7 +50,6 @@ router.post('/', authMiddleware, uploadAvatar.single('image'), async (req, res) 
     if (nonMutualIds.length > 0) {
       group.pendingInvites = nonMutualIds;
       await group.save();
-      // Crear notificación para cada no-mutuo
       const Notification = require('../models/Notification');
       for (const uid of nonMutualIds) {
         await Notification.create({
@@ -97,7 +96,6 @@ router.post('/:id/message', authMiddleware, async (req, res) => {
     group.lastMessage = new Date();
     group.lastMessageText = text?.slice(0, 60) || '';
 
-    // Incrementar unread para todos menos el sender
     group.members.forEach(m => {
       if (m.user.toString() !== req.user._id.toString()) {
         const current = group.unreadCounts.get(m.user.toString()) || 0;
@@ -109,7 +107,6 @@ router.post('/:id/message', authMiddleware, async (req, res) => {
     await group.populate('messages.sender', 'username avatarUrl profileFrame profileFrameUrl');
     const newMsg = group.messages[group.messages.length - 1];
 
-    // Emitir por socket
     const { getIO } = require('../sockets');
     try {
       getIO().to(`group:${group._id}`).emit('group:message', { groupId: group._id, message: newMsg });
@@ -117,6 +114,70 @@ router.post('/:id/message', authMiddleware, async (req, res) => {
 
     res.json({ message: newMsg });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Compartir post en grupo ───────────────────────────────────────────────────
+router.post('/:id/share-post', authMiddleware, async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.id);
+    if (!group) return res.status(404).json({ error: 'Grupo no encontrado' });
+
+    const isMember = group.members.some(m => m.user.toString() === req.user._id.toString());
+    if (!isMember) return res.status(403).json({ error: 'No eres miembro' });
+
+    const isBanned = group.bannedUsers.some(b => b.toString() === req.user._id.toString());
+    if (isBanned) return res.status(403).json({ error: 'Estás baneado de este grupo' });
+
+    const {
+      postId, title, content,
+      imageUrl, authorUsername, authorAvatarUrl, postType,
+    } = req.body;
+
+    const newMsg = {
+      sender: req.user._id,
+      text:   '',
+      type:   'shared_post',
+      sharedPost: {
+        postId:          postId          || null,
+        title:           title           || '',
+        content:         content         || '',
+        imageUrl:        imageUrl        || null,
+        authorUsername:  authorUsername  || '',
+        authorAvatarUrl: authorAvatarUrl || null,
+        postType:        postType        || 'quick',
+      },
+    };
+
+    group.messages.push(newMsg);
+    group.lastMessage     = new Date();
+    group.lastMessageText = '📎 Post compartido';
+
+    // Incrementar unread para todos menos el sender
+    group.members.forEach(m => {
+      if (m.user.toString() !== req.user._id.toString()) {
+        const current = group.unreadCounts.get(m.user.toString()) || 0;
+        group.unreadCounts.set(m.user.toString(), current + 1);
+      }
+    });
+
+    await group.save();
+    await group.populate('messages.sender', 'username avatarUrl profileFrame profileFrameUrl');
+    const savedMsg = group.messages[group.messages.length - 1];
+
+    // Emitir por socket en tiempo real
+    const { getIO } = require('../sockets');
+    try {
+      getIO().to(`group:${group._id}`).emit('group:message', {
+        groupId: group._id,
+        message: savedMsg,
+      });
+    } catch {}
+
+    res.json({ ok: true, messageId: savedMsg._id });
+  } catch (err) {
+    console.error('share-post group error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Banear usuario (solo admin)
@@ -133,8 +194,8 @@ router.post('/:id/ban/:userId', authMiddleware, async (req, res) => {
 });
 
 // Borrar mensaje
-// ?forAll=true → borra para todos (solo admin)
-// sin param   → borra solo para mí (cualquier miembro sobre su propio mensaje o cualquiera)
+// ?forAll=true → borra para todos (solo admin o dueño)
+// sin param   → borra solo para mí
 router.delete('/:id/message/:msgId', authMiddleware, async (req, res) => {
   try {
     const group = await Group.findById(req.params.id);
@@ -146,11 +207,9 @@ router.delete('/:id/message/:msgId', authMiddleware, async (req, res) => {
     const forAll = req.query.forAll === 'true';
 
     if (forAll) {
-      // Borrar para todos — solo admin o dueño del mensaje
       if (!isAdmin && !isOwner) return res.status(403).json({ error: 'Sin permisos' });
       group.messages = group.messages.filter(m => m._id.toString() !== req.params.msgId);
     } else {
-      // Borrar solo para mí — cualquier miembro
       if (!msg.deletedFor) msg.deletedFor = [];
       if (!msg.deletedFor.map(d => d.toString()).includes(req.user._id.toString())) {
         msg.deletedFor.push(req.user._id);
