@@ -8,7 +8,6 @@ function initSockets(server) {
   const io = new Server(server, { cors: { origin: '*' } });
   _io = io;
 
-  // ── Auth middleware ──────────────────────────────────────────────────────────
   io.use((socket, next) => {
     try {
       const token = socket.handshake.auth?.token;
@@ -23,11 +22,8 @@ function initSockets(server) {
 
   io.on('connection', (socket) => {
     console.log(`🔌 Conectado: ${socket.userId}`);
-
-    // Sala personal (notificaciones, etc.)
     socket.join(`user:${socket.userId}`);
 
-    // ── Chats privados ───────────────────────────────────────────────────────
     socket.on('chat:join',  ({ chatId }) => socket.join(`chat:${chatId}`));
     socket.on('chat:leave', ({ chatId }) => socket.leave(`chat:${chatId}`));
 
@@ -51,18 +47,19 @@ function initSockets(server) {
       } catch (e) { console.log('chat:read error', e.message); }
     });
 
-    socket.on('chat:send', async ({ chatId, text, replyTo, type, mediaUrl }) => {
+    socket.on('chat:send', async ({ chatId, text, replyTo, type, mediaUrl, audioDuration }) => {
       try {
         const chat = await Chat.findOne({ _id: chatId, participants: socket.userId });
         if (!chat) return;
 
         const message = {
-          sender:    socket.userId,
-          text:      text?.trim() || '',
-          type:      type || 'text',
-          mediaUrl:  mediaUrl || null,
-          readBy:    [socket.userId],
-          createdAt: new Date(),
+          sender:        socket.userId,
+          text:          text?.trim() || '',
+          type:          type || 'text',
+          mediaUrl:      mediaUrl || null,
+          audioDuration: audioDuration || null,
+          readBy:        [socket.userId],
+          createdAt:     new Date(),
           ...(replyTo ? { replyTo } : {}),
         };
 
@@ -70,7 +67,7 @@ function initSockets(server) {
         chat.lastMessage = new Date();
         chat.lastMessageText =
           type === 'image' ? '[Imagen]' :
-          type === 'audio' ? '[Audio]' :
+          type === 'audio' ? '[Audio]'  :
           text?.trim() || '';
 
         chat.participants.forEach(p => {
@@ -83,13 +80,34 @@ function initSockets(server) {
         await chat.save();
 
         const saved = chat.messages[chat.messages.length - 1];
+
+        // Populate del sender — igual que en grupos, manda objeto completo
+        await Chat.populate(chat, {
+          path:   'messages.sender',
+          select: 'username avatarUrl profileFrame profileFrameUrl',
+          match:  { _id: socket.userId },
+        });
+
+        const populated = chat.messages[chat.messages.length - 1];
+
         io.to(`chat:${chatId}`).emit('chat:message', {
           chatId,
-          message: { ...saved.toObject(), sender: { _id: socket.userId } },
+          message: {
+            _id:           saved._id,
+            text:          saved.text,
+            type:          saved.type,
+            mediaUrl:      saved.mediaUrl,
+            audioDuration: saved.audioDuration,
+            replyTo:       saved.replyTo,
+            reactions:     saved.reactions,
+            readBy:        saved.readBy,
+            createdAt:     saved.createdAt,
+            sender:        populated.sender,
+          },
         });
 
         chat.participants.forEach(p => {
-          if (p.toString() !== socket.userId) {
+          if (p.toString() !== socket.userId.toString()) {
             io.to(`user:${p}`).emit('chat:notification', { chatId });
           }
         });
@@ -110,7 +128,6 @@ function initSockets(server) {
       try {
         if (!text?.trim() && !mediaUrl) return;
 
-        // Verificar que el usuario es miembro activo del grupo
         const group = await Group.findOne({
           _id: groupId,
           'members.user': socket.userId,
@@ -129,12 +146,9 @@ function initSockets(server) {
         };
 
         group.messages.push(message);
-
-        // Actualizar lastMessage y lastMessageText
         group.lastMessage     = message.createdAt;
         group.lastMessageText = type === 'image' ? '[Imagen]' : type === 'audio' ? '[Audio]' : text?.trim() || '';
 
-        // Incrementar unreadCounts para todos los miembros menos el sender
         group.members.forEach(m => {
           const uid = m.user.toString();
           if (uid !== socket.userId.toString()) {
@@ -145,7 +159,6 @@ function initSockets(server) {
         group.markModified('unreadCounts');
         await group.save();
 
-        // Populate del sender para incluir avatar, frame, etc.
         const saved = group.messages[group.messages.length - 1];
         await Group.populate(group, {
           path:   'messages.sender',
@@ -155,22 +168,20 @@ function initSockets(server) {
 
         const populated = group.messages[group.messages.length - 1];
 
-        // Emitir el mensaje a todos en el room (incluye al emisor)
         io.to(`group:${groupId}`).emit('group:message', {
           groupId,
           message: {
-            _id:          saved._id,
-            text:         saved.text,
-            type:         saved.type,
-            mediaUrl:     saved.mediaUrl,
+            _id:           saved._id,
+            text:          saved.text,
+            type:          saved.type,
+            mediaUrl:      saved.mediaUrl,
             audioDuration: saved.audioDuration,
-            replyTo:      saved.replyTo,
-            createdAt:    saved.createdAt,
-            sender:       populated.sender,
+            replyTo:       saved.replyTo,
+            createdAt:     saved.createdAt,
+            sender:        populated.sender,
           },
         });
 
-        // Notificar a miembros fuera del room para que recarguen la lista
         group.members.forEach(m => {
           const uid = m.user.toString();
           if (uid !== socket.userId.toString()) {
