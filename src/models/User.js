@@ -37,17 +37,23 @@ const userSchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now },
     messages:  [{ sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, text: String, createdAt: { type: Date, default: Date.now } }],
   }],
-  lastActive:       { type: Date, default: Date.now },
+  lastActive: { type: Date, default: Date.now },
 }, { timestamps: true });
 
-// Si displayName está vacío al crear/guardar, usa el username como valor inicial
+// ✅ FIX: separado en dos responsabilidades claras
 userSchema.pre('save', async function(next) {
+  // 1. Si displayName está vacío, usa username como valor inicial
   if (!this.displayName || this.displayName.trim() === '') {
     this.displayName = this.username;
   }
 
-  if (!this.isModified('passwordHash')) return next();
-  this.passwordHash = await bcrypt.hash(this.passwordHash, 10);
+  // 2. Hashear password:
+  //    - Si es documento nuevo (isNew) → siempre hashear
+  //    - Si es update → solo si passwordHash fue modificado
+  if (this.isNew || this.isModified('passwordHash')) {
+    this.passwordHash = await bcrypt.hash(this.passwordHash, 10);
+  }
+
   next();
 });
 
