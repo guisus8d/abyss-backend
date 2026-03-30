@@ -5,7 +5,12 @@ const Group = require('../models/Group');
 const Notification = require('../models/Notification');
 
 function initSockets(server) {
-  const io = new Server(server, { cors: { origin: '*' } });
+  const io = new Server(server, {
+    cors: { origin: '*', methods: ['GET', 'POST'] },
+    transports: ['websocket', 'polling'],
+    pingTimeout: 60000,
+    pingInterval: 25000,
+  });
   _io = io;
 
   io.use((socket, next) => {
