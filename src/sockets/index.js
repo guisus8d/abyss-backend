@@ -7,7 +7,7 @@ const Notification = require('../models/Notification');
 function initSockets(server) {
   const io = new Server(server, {
     cors: { origin: '*', methods: ['GET', 'POST'] },
-    transports: ['websocket', 'polling'],
+    transports: ['polling', 'websocket'],
     pingTimeout: 60000,
     pingInterval: 25000,
   });
