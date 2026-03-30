@@ -20,16 +20,13 @@ router.post('/', authMiddleware, uploadAvatar.single('image'), async (req, res) 
     const { name, description, memberIds } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Nombre requerido' });
 
-    // Verificar que los memberIds son seguidores/siguiendo
     const me = await User.findById(req.user._id);
     const validIds = [...(me.followers || []).map(String), ...(me.following || []).map(String)];
     const parsedIds = JSON.parse(memberIds || '[]').filter(id => validIds.includes(String(id)));
 
-    // Separar mutuos de solo-seguidores
-    const meUser = await User.findById(req.user._id);
-    const followerIds = (meUser.followers || []).map(String);
-    const followingIds = (meUser.following || []).map(String);
-    const mutualIds = parsedIds.filter(id => followerIds.includes(String(id)) && followingIds.includes(String(id)));
+    const followerIds  = (me.followers  || []).map(String);
+    const followingIds = (me.following  || []).map(String);
+    const mutualIds    = parsedIds.filter(id =>  followerIds.includes(String(id)) && followingIds.includes(String(id)));
     const nonMutualIds = parsedIds.filter(id => !mutualIds.includes(id));
 
     const members = [
@@ -46,18 +43,14 @@ router.post('/', authMiddleware, uploadAvatar.single('image'), async (req, res) 
       members,
     });
 
-    // Agregar invitaciones pendientes para no-mutuos
     if (nonMutualIds.length > 0) {
       group.pendingInvites = nonMutualIds;
       await group.save();
       const Notification = require('../models/Notification');
       for (const uid of nonMutualIds) {
         await Notification.create({
-          to: uid,
-          from: req.user._id,
-          type: 'group_invite',
-          groupId: group._id,
-          groupName: group.name,
+          to: uid, from: req.user._id,
+          type: 'group_invite', groupId: group._id, groupName: group.name,
         }).catch(() => {});
       }
     }
@@ -77,6 +70,89 @@ router.get('/:id', authMiddleware, async (req, res) => {
     const isMember = group.members.some(m => m.user._id.toString() === req.user._id.toString());
     if (!isMember) return res.status(403).json({ error: 'No eres miembro' });
     res.json({ group });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Editar grupo (nombre, descripción, imagen) — solo admin
+router.patch('/:id', authMiddleware, uploadAvatar.single('image'), async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.id);
+    if (!group) return res.status(404).json({ error: 'Grupo no encontrado' });
+    const isAdmin = group.members.some(m => m.user.toString() === req.user._id.toString() && m.role === 'admin');
+    if (!isAdmin) return res.status(403).json({ error: 'Solo admins' });
+    const { name, description, bgColor, imageUrl } = req.body;
+    if (name)                  group.name        = name.trim();
+    if (description !== undefined) group.description = description.trim();
+    if (bgColor !== undefined) group.bgColor     = bgColor;
+    // imagen nueva via multipart
+    if (req.file) { group.imageUrl = req.file.path; group.imagePublicId = req.file.filename; }
+    // imagen nueva via URL (cuando el cliente sube por separado y manda la URL)
+    else if (imageUrl !== undefined) group.imageUrl = imageUrl || null;
+    await group.save();
+    await group.populate('members.user', 'username avatarUrl profileFrame profileFrameUrl');
+    res.json({ group });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Agregar miembros — solo admin ─────────────────────────────────────────────
+router.post('/:id/add-members', authMiddleware, async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.id);
+    if (!group) return res.status(404).json({ error: 'Grupo no encontrado' });
+    const isAdmin = group.members.some(m => m.user.toString() === req.user._id.toString() && m.role === 'admin');
+    if (!isAdmin) return res.status(403).json({ error: 'Solo admins' });
+
+    const { memberIds = [] } = req.body;
+    const currentIds = new Set(group.members.map(m => m.user.toString()));
+    const toAdd = memberIds.filter(id => !currentIds.has(String(id)));
+
+    for (const id of toAdd) {
+      group.members.push({ user: id, role: 'member' });
+    }
+    await group.save();
+    await group.populate('members.user', 'username avatarUrl profileFrame profileFrameUrl');
+    res.json({ group });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Expulsar miembro — solo admin ─────────────────────────────────────────────
+router.delete('/:id/members/:memberId', authMiddleware, async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.id);
+    if (!group) return res.status(404).json({ error: 'Grupo no encontrado' });
+    const isAdmin = group.members.some(m => m.user.toString() === req.user._id.toString() && m.role === 'admin');
+    if (!isAdmin) return res.status(403).json({ error: 'Solo admins' });
+    // No puede expulsar a otro admin
+    const target = group.members.find(m => m.user.toString() === req.params.memberId);
+    if (target?.role === 'admin') return res.status(403).json({ error: 'No puedes expulsar a otro admin' });
+    group.members = group.members.filter(m => m.user.toString() !== req.params.memberId);
+    await group.save();
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Salir del grupo ───────────────────────────────────────────────────────────
+router.post('/:id/leave', authMiddleware, async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.id);
+    if (!group) return res.status(404).json({ error: 'Grupo no encontrado' });
+    const isMember = group.members.some(m => m.user.toString() === req.user._id.toString());
+    if (!isMember) return res.status(404).json({ error: 'No eres miembro' });
+    // Si es el único admin, transferir admin al siguiente miembro antes de salir
+    const isAdmin = group.members.some(m => m.user.toString() === req.user._id.toString() && m.role === 'admin');
+    const otherAdmins = group.members.filter(m => m.user.toString() !== req.user._id.toString() && m.role === 'admin');
+    if (isAdmin && otherAdmins.length === 0) {
+      const nextMember = group.members.find(m => m.user.toString() !== req.user._id.toString());
+      if (nextMember) nextMember.role = 'admin';
+    }
+    group.members = group.members.filter(m => m.user.toString() !== req.user._id.toString());
+    // Si no quedan miembros, eliminar el grupo
+    if (group.members.length === 0) {
+      await Group.deleteOne({ _id: group._id });
+      return res.json({ ok: true, deleted: true });
+    }
+    await group.save();
+    res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -108,51 +184,32 @@ router.post('/:id/message', authMiddleware, async (req, res) => {
     const newMsg = group.messages[group.messages.length - 1];
 
     const { getIO } = require('../sockets');
-    try {
-      getIO().to(`group:${group._id}`).emit('group:message', { groupId: group._id, message: newMsg });
-    } catch {}
-
+    try { getIO().to(`group:${group._id}`).emit('group:message', { groupId: group._id, message: newMsg }); } catch {}
     res.json({ message: newMsg });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── Compartir post en grupo ───────────────────────────────────────────────────
+// Compartir post en grupo
 router.post('/:id/share-post', authMiddleware, async (req, res) => {
   try {
     const group = await Group.findById(req.params.id);
     if (!group) return res.status(404).json({ error: 'Grupo no encontrado' });
-
     const isMember = group.members.some(m => m.user.toString() === req.user._id.toString());
     if (!isMember) return res.status(403).json({ error: 'No eres miembro' });
-
     const isBanned = group.bannedUsers.some(b => b.toString() === req.user._id.toString());
     if (isBanned) return res.status(403).json({ error: 'Estás baneado de este grupo' });
 
-    const {
-      postId, title, content,
-      imageUrl, authorUsername, authorAvatarUrl, postType,
-    } = req.body;
-
+    const { postId, title, content, imageUrl, authorUsername, authorAvatarUrl, postType } = req.body;
     const newMsg = {
-      sender: req.user._id,
-      text:   '',
-      type:   'shared_post',
-      sharedPost: {
-        postId:          postId          || null,
-        title:           title           || '',
-        content:         content         || '',
-        imageUrl:        imageUrl        || null,
-        authorUsername:  authorUsername  || '',
-        authorAvatarUrl: authorAvatarUrl || null,
-        postType:        postType        || 'quick',
-      },
+      sender: req.user._id, text: '', type: 'shared_post',
+      sharedPost: { postId: postId || null, title: title || '', content: content || '',
+        imageUrl: imageUrl || null, authorUsername: authorUsername || '',
+        authorAvatarUrl: authorAvatarUrl || null, postType: postType || 'quick' },
     };
 
     group.messages.push(newMsg);
-    group.lastMessage     = new Date();
+    group.lastMessage = new Date();
     group.lastMessageText = 'Post compartido';
-
-    // Incrementar unread para todos menos el sender
     group.members.forEach(m => {
       if (m.user.toString() !== req.user._id.toString()) {
         const current = group.unreadCounts.get(m.user.toString()) || 0;
@@ -164,20 +221,10 @@ router.post('/:id/share-post', authMiddleware, async (req, res) => {
     await group.populate('messages.sender', 'username avatarUrl profileFrame profileFrameUrl');
     const savedMsg = group.messages[group.messages.length - 1];
 
-    // Emitir por socket en tiempo real
     const { getIO } = require('../sockets');
-    try {
-      getIO().to(`group:${group._id}`).emit('group:message', {
-        groupId: group._id,
-        message: savedMsg,
-      });
-    } catch {}
-
+    try { getIO().to(`group:${group._id}`).emit('group:message', { groupId: group._id, message: savedMsg }); } catch {}
     res.json({ ok: true, messageId: savedMsg._id });
-  } catch (err) {
-    console.error('share-post group error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // Banear usuario (solo admin)
@@ -194,8 +241,6 @@ router.post('/:id/ban/:userId', authMiddleware, async (req, res) => {
 });
 
 // Borrar mensaje
-// ?forAll=true → borra para todos (solo admin o dueño)
-// sin param   → borra solo para mí
 router.delete('/:id/message/:msgId', authMiddleware, async (req, res) => {
   try {
     const group = await Group.findById(req.params.id);
@@ -204,8 +249,7 @@ router.delete('/:id/message/:msgId', authMiddleware, async (req, res) => {
     const msg = group.messages.id(req.params.msgId);
     if (!msg) return res.status(404).json({ error: 'Mensaje no encontrado' });
     const isOwner = msg.sender.toString() === req.user._id.toString();
-    const forAll = req.query.forAll === 'true';
-
+    const forAll  = req.query.forAll === 'true';
     if (forAll) {
       if (!isAdmin && !isOwner) return res.status(403).json({ error: 'Sin permisos' });
       group.messages = group.messages.filter(m => m._id.toString() !== req.params.msgId);
@@ -217,22 +261,6 @@ router.delete('/:id/message/:msgId', authMiddleware, async (req, res) => {
     }
     await group.save();
     res.json({ ok: true, forAll });
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
-
-// Editar grupo (nombre, descripción, imagen, fondo) — solo admin
-router.patch('/:id', authMiddleware, uploadAvatar.single('image'), async (req, res) => {
-  try {
-    const group = await Group.findById(req.params.id);
-    const isAdmin = group.members.some(m => m.user.toString() === req.user._id.toString() && m.role === 'admin');
-    if (!isAdmin) return res.status(403).json({ error: 'Solo admins' });
-    const { name, description, bgColor } = req.body;
-    if (name) group.name = name.trim();
-    if (description !== undefined) group.description = description.trim();
-    if (bgColor !== undefined) group.bgColor = bgColor;
-    if (req.file) { group.imageUrl = req.file.path; group.imagePublicId = req.file.filename; }
-    await group.save();
-    res.json({ group });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
