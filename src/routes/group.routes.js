@@ -127,11 +127,10 @@ router.post('/:id/add-members', authMiddleware, async (req, res) => {
     await group.save();
     await group.populate('members.user', 'username avatarUrl profileFrame profileFrameUrl');
 
-    // Mensajes de sistema por cada nuevo miembro
     for (const id of toAdd) {
       const newUser = await User.findById(id).select('username').lean();
       if (newUser) {
-        await emitSystemMessage(group, `${newUser.username} se unió al grupo`, 'join');
+        await emitSystemMessage(group, `${newUser.username} se unio al grupo`, 'join');
       }
     }
 
@@ -139,7 +138,37 @@ router.post('/:id/add-members', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Expulsar miembro — solo admin
+// Expulsar miembro — solo admin (sin banear, puede regresar)
+router.post('/:id/kick/:memberId', authMiddleware, async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.id);
+    if (!group) return res.status(404).json({ error: 'Grupo no encontrado' });
+    const isAdmin = group.members.some(m => m.user.toString() === req.user._id.toString() && m.role === 'admin');
+    if (!isAdmin) return res.status(403).json({ error: 'Solo admins' });
+    const target = group.members.find(m => m.user.toString() === req.params.memberId);
+    if (!target) return res.status(404).json({ error: 'Miembro no encontrado' });
+    if (target.role === 'admin') return res.status(403).json({ error: 'No puedes expulsar a otro admin' });
+
+    const kickedUser = await User.findById(req.params.memberId).select('username').lean();
+    group.members = group.members.filter(m => m.user.toString() !== req.params.memberId);
+    await group.save();
+
+    // Notificar al expulsado via socket para que vea el banner
+    getIO()?.to(`group:${group._id}`).emit('group:kicked', {
+      groupId:  group._id.toString(),
+      userId:   req.params.memberId,
+      username: kickedUser?.username,
+    });
+
+    if (kickedUser) {
+      await emitSystemMessage(group, `${kickedUser.username} fue expulsado del grupo`, 'kick');
+    }
+
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Expulsar miembro por DELETE (compatibilidad con GroupSettingsScreen existente)
 router.delete('/:id/members/:memberId', authMiddleware, async (req, res) => {
   try {
     const group = await Group.findById(req.params.id);
@@ -152,6 +181,12 @@ router.delete('/:id/members/:memberId', authMiddleware, async (req, res) => {
     const kickedUser = await User.findById(req.params.memberId).select('username').lean();
     group.members = group.members.filter(m => m.user.toString() !== req.params.memberId);
     await group.save();
+
+    getIO()?.to(`group:${group._id}`).emit('group:kicked', {
+      groupId:  group._id.toString(),
+      userId:   req.params.memberId,
+      username: kickedUser?.username,
+    });
 
     if (kickedUser) {
       await emitSystemMessage(group, `${kickedUser.username} fue expulsado del grupo`, 'kick');
@@ -186,7 +221,7 @@ router.post('/:id/leave', authMiddleware, async (req, res) => {
     await group.save();
 
     if (leavingUser) {
-      await emitSystemMessage(group, `${leavingUser.username} salió del grupo`, 'leave');
+      await emitSystemMessage(group, `${leavingUser.username} salio del grupo`, 'leave');
     }
 
     res.json({ ok: true });
@@ -202,7 +237,7 @@ router.post('/:id/message', authMiddleware, async (req, res) => {
     const isMember = group.members.some(m => m.user.toString() === req.user._id.toString());
     if (!isMember) return res.status(403).json({ error: 'No eres miembro' });
     const isBanned = group.bannedUsers.some(b => b.toString() === req.user._id.toString());
-    if (isBanned) return res.status(403).json({ error: 'Estás baneado de este grupo' });
+    if (isBanned) return res.status(403).json({ error: 'Estas baneado de este grupo' });
 
     const msg = { sender: req.user._id, text, replyTo };
     group.messages.push(msg);
@@ -233,7 +268,7 @@ router.post('/:id/share-post', authMiddleware, async (req, res) => {
     const isMember = group.members.some(m => m.user.toString() === req.user._id.toString());
     if (!isMember) return res.status(403).json({ error: 'No eres miembro' });
     const isBanned = group.bannedUsers.some(b => b.toString() === req.user._id.toString());
-    if (isBanned) return res.status(403).json({ error: 'Estás baneado de este grupo' });
+    if (isBanned) return res.status(403).json({ error: 'Estas baneado de este grupo' });
 
     const { postId, title, content, imageUrl, authorUsername, authorAvatarUrl, postType } = req.body;
     const newMsg = {
@@ -263,6 +298,7 @@ router.post('/:id/share-post', authMiddleware, async (req, res) => {
 });
 
 // Banear usuario — solo admin
+// Acepta query param ?deleteMessages=true para borrar todos sus mensajes
 router.post('/:id/ban/:userId', authMiddleware, async (req, res) => {
   try {
     const group = await Group.findById(req.params.id);
@@ -271,15 +307,75 @@ router.post('/:id/ban/:userId', authMiddleware, async (req, res) => {
     if (!isAdmin) return res.status(403).json({ error: 'Solo admins' });
 
     const bannedUser = await User.findById(req.params.userId).select('username').lean();
+
+    // Borrar todos sus mensajes si se solicita
+    if (req.query.deleteMessages === 'true') {
+      group.messages = group.messages.filter(
+        m => m.sender?.toString() !== req.params.userId
+      );
+    }
+
     group.bannedUsers.push(req.params.userId);
     group.members = group.members.filter(m => m.user.toString() !== req.params.userId);
     await group.save();
+
+    // Notificar al baneado via socket
+    getIO()?.to(`group:${group._id}`).emit('group:banned', {
+      groupId:  group._id.toString(),
+      userId:   req.params.userId,
+      username: bannedUser?.username,
+    });
 
     if (bannedUser) {
       await emitSystemMessage(group, `${bannedUser.username} fue baneado del grupo`, 'ban');
     }
 
     res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Desbanear usuario — solo admin
+router.delete('/:id/ban/:userId', authMiddleware, async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.id);
+    if (!group) return res.status(404).json({ error: 'No encontrado' });
+    const isAdmin = group.members.some(m => m.user.toString() === req.user._id.toString() && m.role === 'admin');
+    if (!isAdmin) return res.status(403).json({ error: 'Solo admins' });
+    group.bannedUsers = group.bannedUsers.filter(b => b.toString() !== req.params.userId);
+    await group.save();
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Obtener lista de baneados — solo admin
+router.get('/:id/banned', authMiddleware, async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.id)
+      .populate('bannedUsers', 'username avatarUrl profileFrame profileFrameUrl');
+    if (!group) return res.status(404).json({ error: 'No encontrado' });
+    const isAdmin = group.members.some(m => m.user.toString() === req.user._id.toString() && m.role === 'admin');
+    if (!isAdmin) return res.status(403).json({ error: 'Solo admins' });
+    res.json({ bannedUsers: group.bannedUsers });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Unirse al grupo (para usuarios expulsados que no fueron baneados)
+router.post('/:id/join', authMiddleware, async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.id);
+    if (!group) return res.status(404).json({ error: 'Grupo no encontrado' });
+    const isBanned = group.bannedUsers.some(b => b.toString() === req.user._id.toString());
+    if (isBanned) return res.status(403).json({ error: 'Estas baneado de este grupo' });
+    const isMember = group.members.some(m => m.user.toString() === req.user._id.toString());
+    if (isMember) return res.status(400).json({ error: 'Ya eres miembro' });
+    group.members.push({ user: req.user._id, role: 'member' });
+    await group.save();
+    const joiningUser = await User.findById(req.user._id).select('username').lean();
+    if (joiningUser) {
+      await emitSystemMessage(group, `${joiningUser.username} se unio al grupo`, 'join');
+    }
+    await group.populate('members.user', 'username avatarUrl profileFrame profileFrameUrl');
+    res.json({ group });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -298,7 +394,6 @@ router.delete('/:id/message/:msgId', authMiddleware, async (req, res) => {
       if (!isAdmin && !isOwner) return res.status(403).json({ error: 'Sin permisos' });
       group.messages = group.messages.filter(m => m._id.toString() !== req.params.msgId);
       await group.save();
-      // Notificar a todos en tiempo real para borrado inmediato
       getIO()?.to(`group:${group._id}`).emit('group:message_deleted', {
         groupId: group._id.toString(),
         msgId:   req.params.msgId,
@@ -316,7 +411,7 @@ router.delete('/:id/message/:msgId', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// Marcar como leído
+// Marcar como leido
 router.post('/:id/read', authMiddleware, async (req, res) => {
   try {
     const group = await Group.findById(req.params.id);
