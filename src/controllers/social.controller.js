@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const Notification = require('../models/Notification');
+const { sendPush } = require('../utils/pushNotifications');
 
 // Seguir usuario
 async function followUser(req, res) {
@@ -29,6 +30,7 @@ async function followUser(req, res) {
         const { getIO } = require('../sockets');
         getIO().to(`user:${target._id}`).emit('notification:new');
       } catch(e) {}
+      sendPush(target.pushToken, 'Nuevo seguidor', `${req.user.username} te siguió`, { type: 'follow' });
       res.json({ following: true, message: `Ahora sigues a ${username}` });
     }
   } catch (err) {
@@ -73,7 +75,7 @@ async function blockUser(req, res) {
 async function getFollowers(req, res) {
   try {
     const user = await User.findOne({ username: req.params.username })
-      .populate('followers', 'username xp badges profileFrame');
+      .populate('followers', 'username xp avatarUrl badges profileFrame profileFrameUrl followers');
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.json({ followers: user.followers, count: user.followers.length });
   } catch (err) {
@@ -85,7 +87,7 @@ async function getFollowers(req, res) {
 async function getFollowing(req, res) {
   try {
     const user = await User.findOne({ username: req.params.username })
-      .populate('following', 'username xp badges profileFrame');
+      .populate('following', 'username xp avatarUrl badges profileFrame profileFrameUrl followers');
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.json({ following: user.following, count: user.following.length });
   } catch (err) {
@@ -107,7 +109,7 @@ async function getFollowingFeed(req, res) {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate('author', 'username profileFrame xp')
+      .populate('author', 'username profileFrame profileFrameUrl xp avatarUrl')
       .populate('comments.user', 'username');
 
     res.json({ posts, page });

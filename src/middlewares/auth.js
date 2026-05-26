@@ -8,6 +8,7 @@ async function authMiddleware(req, res, next) {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     const user = await User.findById(decoded.id).populate('badges');
     if (!user) return res.status(401).json({ error: 'Usuario no encontrado' });
+    if (user.banned) return res.status(403).json({ error: 'Cuenta suspendida', reason: user.bannedReason });
     req.user = user;
     next();
   } catch (err) {

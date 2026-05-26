@@ -15,7 +15,7 @@ const server = http.createServer(app);
 
 // ── Seguridad básica ──────────────────────────
 app.use(helmet());
-app.use(cors({ origin: '*', methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'], allowedHeaders: ['Content-Type','Authorization'] }));
+app.use(cors({ origin: '*', methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'], allowedHeaders: ['Content-Type','Authorization','x-file-type'] }));
 app.use(express.json({ limit: '20mb' })); // limitar tamaño body
 
 // ── Sanitizar inputs MongoDB ──────────────────
@@ -29,8 +29,8 @@ app.use((req, res, next) => {
 app.set('trust proxy', 1);
 // ── Rate limit global: 100 req / 15min por IP ─
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
+  windowMs: 1 * 60 * 1000,
+  max: 1000,
   message: { error: 'Demasiadas peticiones, espera un momento' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -39,14 +39,15 @@ app.use('/api', globalLimiter);
 
 // ── Rate limit estricto para auth ─────────────
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
+  windowMs: 1 * 60 * 1000,
+  max: 100,
   message: { error: 'Demasiados intentos, espera 15 minutos' },
 });
 app.use('/api/auth', authLimiter);
 
 // ── Rutas ─────────────────────────────────────
 app.use('/api', routes);
+app.use(require('./routes/web.routes'));
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
 
 // ── Error handler global ──────────────────────
@@ -74,3 +75,7 @@ start().catch(console.error);
 // Bots de actividad
 const { startBots } = require('./utils/bots');
 startBots();
+
+// Cron de expiración de regalos
+const { startGiftCron } = require('./utils/giftCron');
+startGiftCron();

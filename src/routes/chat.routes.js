@@ -5,41 +5,41 @@ const Chat = require('../models/Chat');
 const User = require('../models/User');
 const Notification = require('../models/Notification');
 
-// IMPORTANTE: rutas específicas ANTES que rutas con parámetros
-
-// Mis chats
+// ── Mis chats ─────────────────────────────────────────────────────────────────
 router.get('/', authMiddleware, getMyChats);
 
-// Solicitudes que YO envié (para mostrar en mi lista como "pendiente")
+// ── Solicitudes enviadas ──────────────────────────────────────────────────────
 router.get('/requests/sent', authMiddleware, async (req, res) => {
   try {
     const users = await User.find({
       'chatRequests.from': req.user._id,
       'chatRequests.status': 'pending',
-    }).select('username avatarUrl xp chatRequests');
+    }).select('username avatarUrl xp profileFrame profileFrameUrl chatRequests');
 
     const sent = users.map(u => {
       const req_ = u.chatRequests.find(
         r => r.from.toString() === req.user._id.toString() && r.status === 'pending'
       );
+      if (!req_) return null;
       return {
         _id: req_._id,
-        to: { _id: u._id, username: u.username, avatarUrl: u.avatarUrl, xp: u.xp },
+        to: { _id: u._id, username: u.username, avatarUrl: u.avatarUrl, xp: u.xp,
+              profileFrame: u.profileFrame, profileFrameUrl: u.profileFrameUrl },
         messages: req_.messages || [],
         createdAt: req_.createdAt,
       };
     });
-    res.json({ sent });
+    res.json({ sent: sent.filter(Boolean) });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Solicitudes pendientes
+// ── Solicitudes pendientes ────────────────────────────────────────────────────
 router.get('/requests/pending', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
-      .populate('chatRequests.from', 'username avatarUrl xp');
+      .populate('chatRequests.from', 'username avatarUrl xp profileFrame profileFrameUrl');
     const pending = (user.chatRequests || []).filter(r => r.status === 'pending');
     res.json({ requests: pending });
   } catch (err) {
@@ -47,7 +47,7 @@ router.get('/requests/pending', authMiddleware, async (req, res) => {
   }
 });
 
-// Enviar solicitud
+// ── Enviar solicitud ──────────────────────────────────────────────────────────
 router.post('/request/:userId', authMiddleware, async (req, res) => {
   try {
     const target = await User.findById(req.params.userId);
@@ -68,7 +68,7 @@ router.post('/request/:userId', authMiddleware, async (req, res) => {
   }
 });
 
-// Aceptar o rechazar
+// ── Aceptar o rechazar solicitud ──────────────────────────────────────────────
 router.patch('/request/:fromId', authMiddleware, async (req, res) => {
   try {
     const { action } = req.body;
@@ -78,27 +78,35 @@ router.patch('/request/:fromId', authMiddleware, async (req, res) => {
     if (action === 'accept') {
       req_.status = 'accepted';
       const pendingMsgs = (req_.messages || []).map(m => ({
-        sender: m.sender,
-        text: m.text,
-        readBy: [req.user._id],   // el que acepta los marca como leídos
+        sender:  m.sender,
+        text:    m.text,
+        readBy:  [req.user._id],
         createdAt: m.createdAt,
       }));
       await user.save();
       const lastPending = pendingMsgs[pendingMsgs.length - 1];
-      const chat = await Chat.create({
-        participants: [req.user._id, req.params.fromId],
-        messages: pendingMsgs,
-        lastMessage: lastPending?.createdAt || new Date(),
-        lastMessageText: lastPending?.text || '',
-      });
-      await chat.populate('participants', 'username avatarUrl xp');
-      // Notificar al solicitante que fue aceptado
-      await Notification.create({ to: req.params.fromId, from: req.user._id, type: 'chat_accepted' });
-      try {
-        const { getIO } = require('../sockets');
-        getIO().to(`user:${req.params.fromId}`).emit('notification:new');
-      } catch(e) {}
-      return res.json({ message: 'Chat aceptado', chat });
+      let chat = await Chat.findOne({ participants: { $all: [req.user._id, req.params.fromId] } });
+      if (!chat) {
+        chat = await Chat.create({
+          participants:    [req.user._id, req.params.fromId],
+          messages:        pendingMsgs,
+          lastMessage:     lastPending?.createdAt || new Date(),
+          lastMessageText: lastPending?.text || '',
+        });
+      }
+      await chat.populate('participants', 'username avatarUrl xp profileFrame profileFrameUrl');
+await Notification.create({ to: req.params.fromId, from: req.user._id, type: 'chat_accepted' });
+try {
+  const { getIO } = require('../sockets');
+  const io = getIO();
+  // Notificación general
+  io.to(`user:${req.params.fromId}`).emit('notification:new');
+  // ── FIX: notificar al sender con el chat completo para que quite el pending ──
+  await chat.populate('participants', 'username avatarUrl profileFrame profileFrameUrl xp');
+  io.to(`user:${req.params.fromId}`).emit('chat:accepted', { chat: chat.toObject() });
+} catch(e) {}
+return res.json({ message: 'Chat aceptado', chat });
+
     } else {
       req_.status = 'rejected';
       await user.save();
@@ -109,7 +117,7 @@ router.patch('/request/:fromId', authMiddleware, async (req, res) => {
   }
 });
 
-// Verificar estado del chat
+// ── Verificar estado del chat ─────────────────────────────────────────────────
 router.get('/check/:userId', authMiddleware, async (req, res) => {
   try {
     const existing = await Chat.findOne({
@@ -127,12 +135,12 @@ router.get('/check/:userId', authMiddleware, async (req, res) => {
   }
 });
 
-// Abrir chat activo
+// ── Abrir chat activo con usuario ─────────────────────────────────────────────
 router.get('/with/:userId', authMiddleware, async (req, res) => {
   try {
     const existing = await Chat.findOne({
       participants: { $all: [req.user._id, req.params.userId] }
-    }).populate('participants', 'username avatarUrl xp');
+    }).populate('participants', 'username avatarUrl xp profileFrame profileFrameUrl');
     if (!existing) return res.status(404).json({ error: 'No tienen chat activo' });
     res.json({ chat: existing });
   } catch (err) {
@@ -140,37 +148,75 @@ router.get('/with/:userId', authMiddleware, async (req, res) => {
   }
 });
 
-// Enviar mensaje dentro de una solicitud (sin chat activo aún)
+// ── Mensaje dentro de solicitud pendiente ─────────────────────────────────────
 router.post('/request/:userId/message', authMiddleware, async (req, res) => {
   try {
     const { text } = req.body;
     if (!text?.trim()) return res.status(400).json({ error: 'Texto vacío' });
     const target = await User.findById(req.params.userId);
     if (!target) return res.status(404).json({ error: 'Usuario no encontrado' });
-
-    // Buscar la solicitud pendiente
     const chatReq = (target.chatRequests || []).find(
       r => r.from.toString() === req.user._id.toString() && r.status === 'pending'
     );
     if (!chatReq) return res.status(400).json({ error: 'No tienes solicitud pendiente' });
-
-    // Guardar mensaje en campo pendingMessages del "chat fantasma"
-    // Usamos un documento temporal en User para simplificar
     if (!chatReq.messages) chatReq.messages = [];
     chatReq.messages.push({ sender: req.user._id, text: text.trim(), createdAt: new Date() });
     target.markModified('chatRequests');
     await target.save();
-
     res.json({ message: { sender: req.user._id, text: text.trim(), createdAt: new Date() } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Mensajes — AL FINAL porque /:chatId captura todo
+// ── Compartir post en un chat activo ─────────────────────────────────────────
+router.post('/:chatId/share-post', authMiddleware, async (req, res) => {
+  try {
+    const { postId, title, content, imageUrl, authorUsername, authorAvatarUrl, postType, text } = req.body;
+    if (!postId) return res.status(400).json({ error: 'postId requerido' });
+
+    const chat = await Chat.findOne({
+      _id: req.params.chatId,
+      participants: req.user._id,
+    });
+    if (!chat) return res.status(404).json({ error: 'Chat no encontrado' });
+
+    const newMessage = {
+      sender:     req.user._id,
+      type:       'shared_post',
+      text:       text?.trim() || '',
+      sharedPost: { postId, title, content, imageUrl, authorUsername, authorAvatarUrl, postType },
+      readBy:     [req.user._id],
+    };
+
+    chat.messages.push(newMessage);
+    chat.lastMessage     = new Date();
+    chat.lastMessageText = `Post de @${authorUsername}`;
+    await chat.save();
+
+    const saved = chat.messages[chat.messages.length - 1];
+
+    try {
+      const { getIO } = require('../sockets');
+      const io = getIO();
+      chat.participants.forEach(p => {
+        io?.to(`user:${p.toString()}`).emit('chat:message', {
+          chatId:  chat._id,
+          message: saved,
+        });
+      });
+    } catch (e) {}
+
+    res.status(201).json({ message: saved });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Mensajes de un chat — AL FINAL (/:chatId captura todo) ───────────────────
 router.get('/:chatId/messages', authMiddleware, getChatMessages);
 
-// Reaccionar a mensaje
+// ── Reaccionar a mensaje ──────────────────────────────────────────────────────
 router.post('/:chatId/message/:msgId/react', authMiddleware, async (req, res) => {
   try {
     const { emoji } = req.body;
@@ -187,7 +233,6 @@ router.post('/:chatId/message/:msgId/react', authMiddleware, async (req, res) =>
       msg.reactions.push({ user: req.user._id, emoji });
     }
     await chat.save();
-    // Emitir por socket
     const { getIO } = require('../sockets');
     chat.participants.forEach(p => {
       getIO()?.to(`user:${p.toString()}`).emit('chat:message_reaction', {
@@ -198,7 +243,7 @@ router.post('/:chatId/message/:msgId/react', authMiddleware, async (req, res) =>
   } catch(err) { res.status(500).json({ error: err.message }); }
 });
 
-// Borrar mensaje para mí
+// ── Borrar mensaje para mí ────────────────────────────────────────────────────
 router.delete('/:chatId/message/:msgId', authMiddleware, async (req, res) => {
   try {
     const chat = await Chat.findById(req.params.chatId);
@@ -209,6 +254,52 @@ router.delete('/:chatId/message/:msgId', authMiddleware, async (req, res) => {
     await chat.save();
     res.json({ ok: true });
   } catch(err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Compartir perfil en un chat activo ───────────────────────────────────────
+router.post('/:chatId/share-profile', authMiddleware, async (req, res) => {
+  try {
+    const { userId, username, avatarUrl, xp, followersCount, profileFrame, profileFrameUrl } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId requerido' });
+    const chat = await Chat.findOne({ _id: req.params.chatId, participants: req.user._id });
+    if (!chat) return res.status(404).json({ error: 'Chat no encontrado' });
+    const newMessage = {
+      sender: req.user._id, type: 'shared_profile', text: '',
+      sharedProfile: { userId, username, avatarUrl, xp: xp||0, followersCount: followersCount||0, profileFrame: profileFrame||null, profileFrameUrl: profileFrameUrl||null },
+      readBy: [req.user._id],
+    };
+    chat.messages.push(newMessage);
+    chat.lastMessage = new Date();
+    chat.lastMessageText = `Perfil de @${username}`;
+    chat.participants.forEach(p => {
+      if (p.toString() !== req.user._id.toString()) {
+        const cur = chat.unreadCounts?.get(p.toString()) || 0;
+        chat.unreadCounts.set(p.toString(), cur + 1);
+      }
+    });
+    chat.markModified('unreadCounts');
+    await chat.save();
+    const saved = chat.messages[chat.messages.length - 1];
+    try { const { getIO } = require('../sockets'); getIO()?.to(`chat:${chat._id}`).emit('chat:message', { chatId: chat._id, message: { ...saved.toObject(), sender: { _id: req.user._id } } }); } catch {}
+    res.status(201).json({ message: saved });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Upload media ──────────────────────────────────────────────────────────────
+const { uploadPost: uploadMedia, uploadAudio } = require('../config/cloudinary');
+
+router.post('/upload', authMiddleware, uploadMedia.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file' });
+    res.json({ url: req.file.path });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/upload/audio', authMiddleware, uploadAudio.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file' });
+    res.json({ url: req.file.path });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 module.exports = router;

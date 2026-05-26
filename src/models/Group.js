@@ -1,15 +1,11 @@
 const mongoose = require('mongoose');
 
-const messageReactionSchema = new mongoose.Schema({
-  user:  { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  emoji: { type: String },
-}, { _id: false });
-
 const messageSchema = new mongoose.Schema({
-  sender:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  text:      { type: String, default: '', maxlength: 2000 },
-  type:      { type: String, default: 'text', enum: ['text', 'image', 'audio', 'shared_post', 'shared_profile', 'gift'] },
-  mediaUrl:  { type: String, default: null },
+  sender:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  text:     { type: String, default: '', maxlength: 2000 },
+  type:     { type: String, default: 'text', enum: ['text', 'image', 'audio', 'shared_post', 'shared_profile', 'system', 'gift'] },
+  systemAction: { type: String, default: null }, // 'join' | 'leave' | 'kick' | 'ban'
+  mediaUrl:      { type: String, default: null },
   giftId:    { type: mongoose.Schema.Types.ObjectId, ref: 'Gift', default: null },
   giftData: {
     monedas:         { type: Number,   default: 0 },
@@ -22,16 +18,14 @@ const messageSchema = new mongoose.Schema({
     slotsReclamados: { type: Number,   default: 0 },
     reclamadoPor:    { type: [String], default: [] },
   },
-  readBy:    [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  reactions: [messageReactionSchema],
-  replyTo: {
+  audioDuration: { type: Number, default: null },
+  replyTo:  {
     messageId:      { type: mongoose.Schema.Types.ObjectId },
     text:           { type: String },
     senderUsername: { type: String },
   },
-  // ── Post compartido ──────────────────────────────────────────────────────
   sharedPost: {
-    postId:          { type: mongoose.Schema.Types.ObjectId, ref: 'Post' },
+    postId:          { type: String, default: null },
     title:           { type: String, default: '' },
     content:         { type: String, default: '' },
     imageUrl:        { type: String, default: null },
@@ -39,9 +33,8 @@ const messageSchema = new mongoose.Schema({
     authorAvatarUrl: { type: String, default: null },
     postType:        { type: String, default: 'quick' },
   },
-
   sharedProfile: {
-    userId:          { type: mongoose.Schema.Types.ObjectId },
+    userId:          { type: String, default: null },
     username:        { type: String, default: '' },
     avatarUrl:       { type: String, default: null },
     xp:              { type: Number, default: 0 },
@@ -49,20 +42,33 @@ const messageSchema = new mongoose.Schema({
     profileFrame:    { type: String, default: null },
     profileFrameUrl: { type: String, default: null },
   },
-
   deletedFor: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  reactions:  [{ user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, emoji: String }],
 }, { timestamps: true });
 
-const chatSchema = new mongoose.Schema({
-  participants:    [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }],
+const memberSchema = new mongoose.Schema({
+  user:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  role:     { type: String, enum: ['admin', 'member'], default: 'member' },
+  joinedAt: { type: Date, default: Date.now },
+}, { _id: false });
+
+const groupSchema = new mongoose.Schema({
+  name:            { type: String, required: true, maxlength: 60 },
+  description:     { type: String, default: '', maxlength: 200 },
+  imageUrl:        { type: String, default: null },
+  imagePublicId:   { type: String, default: null },
+  bgColor:         { type: String, default: '' },
+  creator:         { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  members:         [memberSchema],
+  pendingInvites:  [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   messages:        [messageSchema],
   lastMessage:     { type: Date, default: Date.now },
   lastMessageText: { type: String, default: '' },
-  pendingMessages: [messageSchema],
   unreadCounts:    { type: Map, of: Number, default: {} },
+  bannedUsers:     [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 }, { timestamps: true });
 
-chatSchema.index({ participants: 1 });
-chatSchema.index({ lastMessage: -1 });
+groupSchema.index({ 'members.user': 1 });
+groupSchema.index({ lastMessage: -1 });
 
-module.exports = mongoose.model('Chat', chatSchema);
+module.exports = mongoose.model('Group', groupSchema);

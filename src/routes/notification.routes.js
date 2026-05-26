@@ -14,7 +14,7 @@ router.get('/', authMiddleware, async (req, res) => {
         .sort({ createdAt: -1 })
         .skip((page - 1) * limit)
         .limit(parseInt(limit))
-        .populate('from', 'username avatarUrl xp')
+        .populate('from', 'username avatarUrl xp profileFrame profileFrameUrl')
         .populate('post', 'imageUrl'),
       Notification.countDocuments(filter),
       Notification.countDocuments({ to: req.user._id, read: false }),
