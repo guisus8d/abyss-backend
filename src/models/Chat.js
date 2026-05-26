@@ -58,7 +58,6 @@ const chatSchema = new mongoose.Schema({
   messages:        [messageSchema],
   lastMessage:     { type: Date, default: Date.now },
   lastMessageText: { type: String, default: '' },
-  pendingMessages: [messageSchema],
   unreadCounts:    { type: Map, of: Number, default: {} },
 }, { timestamps: true });
 

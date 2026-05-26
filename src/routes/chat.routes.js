@@ -8,127 +8,51 @@ const Notification = require('../models/Notification');
 // ── Mis chats ─────────────────────────────────────────────────────────────────
 router.get('/', authMiddleware, getMyChats);
 
-// ── Solicitudes enviadas ──────────────────────────────────────────────────────
+// ── Solicitudes enviadas (legacy — devuelve vacío) ────────────────────────────
 router.get('/requests/sent', authMiddleware, async (req, res) => {
-  try {
-    const users = await User.find({
-      'chatRequests.from': req.user._id,
-      'chatRequests.status': 'pending',
-    }).select('username avatarUrl xp profileFrame profileFrameUrl chatRequests');
-
-    const sent = users.map(u => {
-      const req_ = u.chatRequests.find(
-        r => r.from.toString() === req.user._id.toString() && r.status === 'pending'
-      );
-      if (!req_) return null;
-      return {
-        _id: req_._id,
-        to: { _id: u._id, username: u.username, avatarUrl: u.avatarUrl, xp: u.xp,
-              profileFrame: u.profileFrame, profileFrameUrl: u.profileFrameUrl },
-        messages: req_.messages || [],
-        createdAt: req_.createdAt,
-      };
-    });
-    res.json({ sent: sent.filter(Boolean) });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.json({ sent: [] });
 });
 
-// ── Solicitudes pendientes ────────────────────────────────────────────────────
+// ── Solicitudes pendientes (legacy — devuelve vacío) ─────────────────────────
 router.get('/requests/pending', authMiddleware, async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id)
-      .populate('chatRequests.from', 'username avatarUrl xp profileFrame profileFrameUrl');
-    const pending = (user.chatRequests || []).filter(r => r.status === 'pending');
-    res.json({ requests: pending });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  res.json({ requests: [] });
 });
 
-// ── Enviar solicitud ──────────────────────────────────────────────────────────
+// ── Crear o abrir chat directo con un usuario ─────────────────────────────────
 router.post('/request/:userId', authMiddleware, async (req, res) => {
   try {
     const target = await User.findById(req.params.userId);
     if (!target) return res.status(404).json({ error: 'Usuario no encontrado' });
     if (target._id.toString() === req.user._id.toString())
-      return res.status(400).json({ error: 'No puedes enviarte una solicitud' });
-    const already = (target.chatRequests || []).find(
-      r => r.from.toString() === req.user._id.toString() && r.status === 'pending'
-    );
-    if (already) return res.status(400).json({ error: 'Solicitud ya enviada' });
-    const existing = await Chat.findOne({ participants: { $all: [req.user._id, target._id] } });
-    if (existing) return res.status(400).json({ error: 'Ya tienen un chat activo' });
-    target.chatRequests.push({ from: req.user._id });
-    await target.save();
-    res.json({ message: 'Solicitud enviada' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+      return res.status(400).json({ error: 'No puedes chatear contigo mismo' });
 
-// ── Aceptar o rechazar solicitud ──────────────────────────────────────────────
-router.patch('/request/:fromId', authMiddleware, async (req, res) => {
-  try {
-    const { action } = req.body;
-    const user = await User.findById(req.user._id);
-    const req_ = (user.chatRequests || []).find(r => r.from.toString() === req.params.fromId);
-    if (!req_) return res.status(404).json({ error: 'Solicitud no encontrada' });
-    if (action === 'accept') {
-      req_.status = 'accepted';
-      const pendingMsgs = (req_.messages || []).map(m => ({
-        sender:  m.sender,
-        text:    m.text,
-        readBy:  [req.user._id],
-        createdAt: m.createdAt,
-      }));
-      await user.save();
-      const lastPending = pendingMsgs[pendingMsgs.length - 1];
-      let chat = await Chat.findOne({ participants: { $all: [req.user._id, req.params.fromId] } });
-      if (!chat) {
-        chat = await Chat.create({
-          participants:    [req.user._id, req.params.fromId],
-          messages:        pendingMsgs,
-          lastMessage:     lastPending?.createdAt || new Date(),
-          lastMessageText: lastPending?.text || '',
-        });
-      }
+    let chat = await Chat.findOne({ participants: { $all: [req.user._id, target._id] } })
+      .populate('participants', 'username avatarUrl xp profileFrame profileFrameUrl');
+
+    if (!chat) {
+      chat = await Chat.create({ participants: [req.user._id, target._id], messages: [] });
       await chat.populate('participants', 'username avatarUrl xp profileFrame profileFrameUrl');
-await Notification.create({ to: req.params.fromId, from: req.user._id, type: 'chat_accepted' });
-try {
-  const { getIO } = require('../sockets');
-  const io = getIO();
-  // Notificación general
-  io.to(`user:${req.params.fromId}`).emit('notification:new');
-  // ── FIX: notificar al sender con el chat completo para que quite el pending ──
-  await chat.populate('participants', 'username avatarUrl profileFrame profileFrameUrl xp');
-  io.to(`user:${req.params.fromId}`).emit('chat:accepted', { chat: chat.toObject() });
-} catch(e) {}
-return res.json({ message: 'Chat aceptado', chat });
-
-    } else {
-      req_.status = 'rejected';
-      await user.save();
-      return res.json({ message: 'Solicitud rechazada' });
+      try {
+        const { getIO } = require('../sockets');
+        getIO()?.to(`user:${target._id}`).emit('chat:notification');
+      } catch (e) {}
     }
+
+    const obj = chat.toObject();
+    delete obj.messages;
+    res.json({ chat: obj });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ── Verificar estado del chat ─────────────────────────────────────────────────
+// ── Verificar si existe chat con un usuario ───────────────────────────────────
 router.get('/check/:userId', authMiddleware, async (req, res) => {
   try {
     const existing = await Chat.findOne({
       participants: { $all: [req.user._id, req.params.userId] }
     });
     if (existing) return res.json({ status: 'active', chatId: existing._id });
-    const target = await User.findById(req.params.userId);
-    const pending = (target?.chatRequests || []).find(
-      r => r.from.toString() === req.user._id.toString() && r.status === 'pending'
-    );
-    if (pending) return res.json({ status: 'requested' });
     res.json({ status: 'none' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -143,27 +67,6 @@ router.get('/with/:userId', authMiddleware, async (req, res) => {
     }).populate('participants', 'username avatarUrl xp profileFrame profileFrameUrl');
     if (!existing) return res.status(404).json({ error: 'No tienen chat activo' });
     res.json({ chat: existing });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ── Mensaje dentro de solicitud pendiente ─────────────────────────────────────
-router.post('/request/:userId/message', authMiddleware, async (req, res) => {
-  try {
-    const { text } = req.body;
-    if (!text?.trim()) return res.status(400).json({ error: 'Texto vacío' });
-    const target = await User.findById(req.params.userId);
-    if (!target) return res.status(404).json({ error: 'Usuario no encontrado' });
-    const chatReq = (target.chatRequests || []).find(
-      r => r.from.toString() === req.user._id.toString() && r.status === 'pending'
-    );
-    if (!chatReq) return res.status(400).json({ error: 'No tienes solicitud pendiente' });
-    if (!chatReq.messages) chatReq.messages = [];
-    chatReq.messages.push({ sender: req.user._id, text: text.trim(), createdAt: new Date() });
-    target.markModified('chatRequests');
-    await target.save();
-    res.json({ message: { sender: req.user._id, text: text.trim(), createdAt: new Date() } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

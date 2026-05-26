@@ -34,12 +34,6 @@ const userSchema = new mongoose.Schema({
   following:        [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   followers:        [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   blocked:          [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  chatRequests:     [{
-    from:      { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    status:    { type: String, enum: ['pending', 'accepted', 'rejected'], default: 'pending' },
-    createdAt: { type: Date, default: Date.now },
-    messages:  [{ sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, text: String, createdAt: { type: Date, default: Date.now } }],
-  }],
   lastActive: { type: Date, default: Date.now },
   pushToken:  { type: String, default: null },
 }, { timestamps: true });

@@ -25,23 +25,31 @@ async function getOrCreateChat(req, res) {
   }
 }
 
-// Listar mis chats con unread count
+// Listar mis chats con unread count + paginación
 async function getMyChats(req, res) {
   try {
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(50, parseInt(req.query.limit) || 20);
+    const skip  = (page - 1) * limit;
+
+    const total = await Chat.countDocuments({ participants: req.user._id });
     const chats = await Chat.find({ participants: req.user._id })
       .sort({ lastMessage: -1 })
+      .skip(skip)
+      .limit(limit)
       .populate('participants', 'username avatarUrl profileFrame profileFrameUrl xp');
 
+    const myIdStr = req.user._id.toString();
     const result = chats.map(chat => {
       const unread = chat.messages.filter(
-        m => !m.readBy.map(r => r.toString()).includes(req.user._id.toString())
+        m => !m.readBy.map(r => r.toString()).includes(myIdStr)
       ).length;
       const obj = chat.toObject();
       delete obj.messages;
       return { ...obj, unread };
     });
 
-    res.json({ chats: result });
+    res.json({ chats: result, page, pages: Math.ceil(total / limit), total });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

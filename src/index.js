@@ -49,6 +49,10 @@ app.use('/api/auth', authLimiter);
 app.use('/api', routes);
 app.use(require('./routes/web.routes'));
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date() }));
+app.get('/version', (req, res) => res.json({
+  commit:    process.env.RAILWAY_GIT_COMMIT_SHA || 'local',
+  timestamp: new Date().toISOString(),
+}));
 
 // ── Error handler global ──────────────────────
 app.use((err, req, res, next) => {
