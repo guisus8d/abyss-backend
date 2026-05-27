@@ -62,8 +62,9 @@ const groupSchema = new mongoose.Schema({
   members:         [memberSchema],
   pendingInvites:  [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   messages:        [messageSchema],
-  lastMessage:     { type: Date, default: Date.now },
-  lastMessageText: { type: String, default: '' },
+  lastMessage:       { type: Date, default: Date.now },
+  lastMessageText:   { type: String, default: '' },
+  lastMessageSender: { type: String, default: '' },
   unreadCounts:    { type: Map, of: Number, default: {} },
   bannedUsers:     [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
 }, { timestamps: true });

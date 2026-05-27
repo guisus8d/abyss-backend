@@ -25,7 +25,7 @@ async function emitSystemMessage(group, text, action) {
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const groups = await Group.find({ 'members.user': req.user._id })
-      .select('name description imageUrl bgColor members lastMessage lastMessageText unreadCounts creator')
+      .select('name description imageUrl bgColor members lastMessage lastMessageText lastMessageSender unreadCounts creator')
       .sort({ lastMessage: -1 });
     res.json({ groups });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -358,8 +358,9 @@ router.post('/:id/message', authMiddleware, async (req, res) => {
 
     const msg = { sender: req.user._id, text, replyTo };
     group.messages.push(msg);
-    group.lastMessage = new Date();
-    group.lastMessageText = text?.slice(0, 60) || '';
+    group.lastMessage       = new Date();
+    group.lastMessageText   = text?.slice(0, 60) || '';
+    group.lastMessageSender = req.user.username || '';
 
     group.members.forEach(m => {
       if (m.user.toString() !== req.user._id.toString()) {
@@ -396,8 +397,9 @@ router.post('/:id/share-post', authMiddleware, async (req, res) => {
     };
 
     group.messages.push(newMsg);
-    group.lastMessage = new Date();
-    group.lastMessageText = 'Post compartido';
+    group.lastMessage       = new Date();
+    group.lastMessageText   = 'Post compartido';
+    group.lastMessageSender = req.user.username || '';
     group.members.forEach(m => {
       if (m.user.toString() !== req.user._id.toString()) {
         const current = group.unreadCounts.get(m.user.toString()) || 0;
@@ -542,8 +544,9 @@ router.post('/:id/share-profile', authMiddleware, async (req, res) => {
       sharedProfile: { userId, username, avatarUrl, xp: xp||0, followersCount: followersCount||0, profileFrame: profileFrame||null, profileFrameUrl: profileFrameUrl||null },
     };
     group.messages.push(newMsg);
-    group.lastMessage = new Date();
-    group.lastMessageText = `Perfil de @${username}`;
+    group.lastMessage       = new Date();
+    group.lastMessageText   = `Perfil de @${username}`;
+    group.lastMessageSender = req.user.username || '';
     group.members.forEach(m => {
       const uid = m.user.toString();
       if (uid !== req.user._id.toString()) {

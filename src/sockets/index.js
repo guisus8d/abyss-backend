@@ -31,6 +31,7 @@ function initSockets(server) {
     console.log(`🔌 Conectado: ${socket.userId}`);
     socket.join(`user:${socket.userId}`);
     User.findByIdAndUpdate(socket.userId, { lastActive: new Date() }).catch(() => {});
+    User.findById(socket.userId).select('username').lean().then(u => { socket.username = u?.username || ''; }).catch(() => {});
     const keepAlive = setInterval(() => {
       User.findByIdAndUpdate(socket.userId, { lastActive: new Date() }).catch(() => {});
     }, 120000);
@@ -168,7 +169,11 @@ function initSockets(server) {
         await Promise.all(chat.participants
           .filter(p => p.toString() !== socket.userId.toString())
           .map(async p => {
-            io.to(`user:${p}`).emit('chat:notification', { chatId });
+            io.to(`user:${p}`).emit('chat:notification', {
+              chatId,
+              lastMessageText: chat.lastMessageText,
+              lastMessage:     chat.lastMessage,
+            });
             const recipient = await User.findById(p).select('pushToken username').lean();
             const preview = type === 'image' ? '📷 Imagen' : type === 'audio' ? '🎤 Audio' : (text?.trim()?.slice(0, 60) || '');
             sendPush(recipient?.pushToken, `${populated.sender?.username || 'Mensaje'}`, preview, { type: 'chat', chatId: chatId.toString() });
@@ -211,12 +216,13 @@ function initSockets(server) {
         };
 
         group.messages.push(message);
-        group.lastMessage     = message.createdAt;
-        group.lastMessageText =
+        group.lastMessage       = message.createdAt;
+        group.lastMessageText   =
           type === 'image' ? '[Imagen]' :
           type === 'audio' ? '[Audio]'  :
           type === 'gift'  ? '🎁 Nuevo regalo disponible' :
           text?.trim() || '';
+        group.lastMessageSender = socket.username || '';
 
         group.members.forEach(m => {
           const uid = m.user.toString();
@@ -256,7 +262,12 @@ function initSockets(server) {
         group.members.forEach(m => {
           const uid = m.user.toString();
           if (uid !== socket.userId.toString()) {
-            io.to(`user:${uid}`).emit('group:notification', { groupId });
+            io.to(`user:${uid}`).emit('group:notification', {
+              groupId,
+              lastMessageText:   group.lastMessageText,
+              lastMessage:       group.lastMessage,
+              lastMessageSender: group.lastMessageSender,
+            });
           }
         });
 

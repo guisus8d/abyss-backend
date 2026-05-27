@@ -32,21 +32,21 @@ async function getMyChats(req, res) {
     const limit = Math.min(50, parseInt(req.query.limit) || 20);
     const skip  = (page - 1) * limit;
 
-    const total = await Chat.countDocuments({ participants: req.user._id });
+    const myIdStr = req.user._id.toString();
+    const total   = await Chat.countDocuments({ participants: req.user._id });
+
+    // select('-messages') evita cargar el historial solo para contar no leídos
     const chats = await Chat.find({ participants: req.user._id })
       .sort({ lastMessage: -1 })
       .skip(skip)
       .limit(limit)
+      .select('-messages')
       .populate('participants', 'username avatarUrl profileFrame profileFrameUrl xp');
 
-    const myIdStr = req.user._id.toString();
     const result = chats.map(chat => {
-      const unread = chat.messages.filter(
-        m => !m.readBy.map(r => r.toString()).includes(myIdStr)
-      ).length;
-      const obj = chat.toObject();
-      delete obj.messages;
-      return { ...obj, unread };
+      const obj    = chat.toObject();
+      obj.unread   = chat.unreadCounts?.get(myIdStr) || 0;
+      return obj;
     });
 
     res.json({ chats: result, page, pages: Math.ceil(total / limit), total });
@@ -55,23 +55,29 @@ async function getMyChats(req, res) {
   }
 }
 
-// Historial de mensajes de un chat
+// Historial de mensajes de un chat (paginado — últimos 50 por defecto)
 async function getChatMessages(req, res) {
   try {
+    const limit = Math.min(200, parseInt(req.query.limit) || 50);
+    const skip  = Math.max(0,   parseInt(req.query.skip)  || 0);
+
     const chat = await Chat.findOne({
       _id: req.params.chatId,
       participants: req.user._id,
-    }).populate('messages.sender', 'username');
+    }).populate('messages.sender', 'username avatarUrl profileFrame profileFrameUrl');
 
     if (!chat) return res.status(404).json({ error: 'Chat no encontrado' });
 
-    // Marcar mensajes como leídos
+    // Marcar mensajes como leídos (el socket chat:read también lo hace al conectar)
     chat.messages.forEach(m => {
       if (!m.readBy.includes(req.user._id)) m.readBy.push(req.user._id);
     });
     await chat.save();
 
-    res.json({ messages: chat.messages });
+    const total    = chat.messages.length;
+    const messages = chat.messages.slice().reverse().slice(skip, skip + limit).reverse();
+
+    res.json({ messages, hasMore: total > skip + limit });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
