@@ -9,7 +9,8 @@ const messageSchema = new mongoose.Schema({
   sender:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   text:      { type: String, default: '', maxlength: 2000 },
   type:      { type: String, default: 'text', enum: ['text', 'image', 'audio', 'shared_post', 'shared_profile', 'gift'] },
-  mediaUrl:  { type: String, default: null },
+  mediaUrl:      { type: String, default: null },
+  audioDuration: { type: Number, default: null },
   giftId:    { type: mongoose.Schema.Types.ObjectId, ref: 'Gift', default: null },
   giftData: {
     monedas:         { type: Number,   default: 0 },

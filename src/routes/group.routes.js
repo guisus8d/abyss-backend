@@ -63,6 +63,28 @@ router.post('/', authMiddleware, uploadAvatar.single('image'), async (req, res) 
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Mensajes paginados del grupo
+router.get('/:id/messages', authMiddleware, async (req, res) => {
+  try {
+    const limit = Math.min(200, parseInt(req.query.limit) || 50);
+    const skip  = Math.max(0,   parseInt(req.query.skip)  || 0);
+
+    const group = await Group.findById(req.params.id)
+      .populate('messages.sender', 'username avatarUrl profileFrame profileFrameUrl role');
+    if (!group) return res.status(404).json({ error: 'Grupo no encontrado' });
+
+    const isMember = group.members.some(
+      m => (m.user?._id || m.user).toString() === req.user._id.toString()
+    );
+    if (!isMember) return res.status(403).json({ error: 'No eres miembro' });
+
+    const total    = group.messages.length;
+    const messages = group.messages.slice().reverse().slice(skip, skip + limit).reverse();
+
+    res.json({ messages, hasMore: total > skip + limit });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Obtener grupo por ID
 router.get('/:id', authMiddleware, async (req, res) => {
   try {

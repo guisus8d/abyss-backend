@@ -107,7 +107,12 @@ async function loginBot(bot) {
       console.log(`🤖 Bot creado: ${bot.username}`);
       return data.token;
     } catch (err) {
-      console.error(`❌ Bot ${bot.username} falló:`, err.response?.data?.error);
+      if (err.response) {
+        console.error(`❌ Bot ${bot.username} falló: HTTP ${err.response.status}`, JSON.stringify(err.response.data));
+      } else {
+        console.error(`❌ Bot ${bot.username} falló (sin respuesta):`, err.message);
+        console.error(`   → ¿Está corriendo el backend en ${BASE_URL}?`);
+      }
       return null;
     }
   }
