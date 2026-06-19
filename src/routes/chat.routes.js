@@ -27,7 +27,7 @@ router.post('/request/:userId', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'No puedes chatear contigo mismo' });
 
     let chat = await Chat.findOne({ participants: { $all: [req.user._id, target._id] } })
-      .populate('participants', 'username avatarUrl xp profileFrame profileFrameUrl');
+      .populate('participants', 'username avatarUrl xp profileFrame profileFrameUrl gender');
 
     if (!chat) {
       chat = await Chat.create({ participants: [req.user._id, target._id], messages: [] });

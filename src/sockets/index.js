@@ -142,7 +142,7 @@ function initSockets(server) {
 
         await Chat.populate(chat, {
           path:   'messages.sender',
-          select: 'username avatarUrl profileFrame profileFrameUrl',
+          select: 'username avatarUrl profileFrame profileFrameUrl gender',
           match:  { _id: socket.userId },
         });
 
@@ -237,7 +237,7 @@ function initSockets(server) {
         const saved = group.messages[group.messages.length - 1];
         await Group.populate(group, {
           path:   'messages.sender',
-          select: 'username avatarUrl profileFrame profileFrameUrl',
+          select: 'username avatarUrl profileFrame profileFrameUrl gender',
           match:  { _id: socket.userId },
         });
 
