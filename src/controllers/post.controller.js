@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const Post = require('../models/Post');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
@@ -6,18 +7,53 @@ const { cloudinary } = require('../config/cloudinary');
 const { getIO } = require('../sockets');
 const { sendPush } = require('../utils/pushNotifications');
 
+function normalizeText(str) {
+  return str.toLowerCase().trim()
+    .replace(/[!?.,;:'"()\-]+/g, '')
+    .replace(/[\u{1F300}-\u{1FAFF}]+/gu, '')
+    .replace(/\s+/g, ' ');
+}
+
+function hashText(str) {
+  return crypto.createHash('md5').update(str).digest('hex');
+}
+
+function levenshteinSimilarity(a, b) {
+  if (!a.length || !b.length) return 0;
+  const maxLen = Math.max(a.length, b.length);
+  if (Math.abs(a.length - b.length) > maxLen * 0.15) return 0;
+  const dp = Array.from({ length: a.length + 1 }, (_, i) =>
+    Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+  );
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      dp[i][j] = a[i-1] === b[j-1]
+        ? dp[i-1][j-1]
+        : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+    }
+  }
+  return 1 - dp[a.length][b.length] / maxLen;
+}
+
 async function createPost(req, res) {
   try {
-    const { content, tags, postType, title } = req.body;
+    const { content, tags, postType, title, commentPermission } = req.body;
     if (!content?.trim() && !title?.trim() && !req.file)
       return res.status(400).json({ error: 'Contenido requerido' });
 
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
+    const recentPosts = await Post.countDocuments({ author: req.user._id, createdAt: { $gte: fiveMinAgo } });
+    if (recentPosts >= 3)
+      return res.status(429).json({ error: 'Has alcanzado el límite de 3 publicaciones cada 5 minutos. Intenta de nuevo en unos minutos.' });
+
+    const VALID_PERMISSIONS = ['everyone', 'friends', 'following', 'nobody'];
     const postData = {
       author:   req.user._id,
       content:  content?.trim() || '',
       postType: postType || 'quick',
       title:    title || '',
       tags:     Array.isArray(tags) ? tags : (tags ? [tags] : []),
+      ...(commentPermission && VALID_PERMISSIONS.includes(commentPermission) ? { commentPermission } : {}),
     };
 
     if (req.file) {
@@ -26,7 +62,7 @@ async function createPost(req, res) {
     }
 
     const post = await Post.create(postData);
-    await post.populate('author', '_id username profileFrame profileFrameUrl xp avatarUrl role');
+    await post.populate('author', '_id username profileFrame profileFrameUrl xp avatarUrl role gender');
 
     await User.findByIdAndUpdate(req.user._id, { $inc: { xp: 10 } });
     const newBadges = await checkAndAwardBadges(req.user._id);
@@ -54,7 +90,7 @@ async function getPosts(req, res) {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate('author', '_id username profileFrame profileFrameUrl xp avatarUrl role')
+      .populate('author', '_id username profileFrame profileFrameUrl xp avatarUrl role gender')
       .populate('comments.user', 'username avatarUrl profileFrame profileFrameUrl role');
 
     const total = await Post.countDocuments(query);
@@ -82,7 +118,7 @@ async function getFollowingPosts(req, res) {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
-      .populate('author', '_id username profileFrame profileFrameUrl xp avatarUrl role')
+      .populate('author', '_id username profileFrame profileFrameUrl xp avatarUrl role gender')
       .populate('comments.user', 'username avatarUrl profileFrame profileFrameUrl role');
 
     const total = await Post.countDocuments({ author: { $in: following } });
@@ -119,7 +155,7 @@ async function getTrendingPosts(req, res) {
     ]);
 
     await Post.populate(posts, [
-      { path: 'author',        select: '_id username profileFrame profileFrameUrl xp avatarUrl role' },
+      { path: 'author',        select: '_id username profileFrame profileFrameUrl xp avatarUrl role gender' },
       { path: 'comments.user', select: 'username avatarUrl profileFrame profileFrameUrl' },
     ]);
 
@@ -136,7 +172,7 @@ async function getPost(req, res) {
     const limit = Math.min(50, parseInt(req.query.commentsLimit) || 20);
 
     const post = await Post.findById(req.params.id)
-      .populate('author', '_id username profileFrame profileFrameUrl xp avatarUrl role')
+      .populate('author', '_id username profileFrame profileFrameUrl xp avatarUrl role gender')
       .populate('comments.user', 'username avatarUrl profileFrame profileFrameUrl role');
     if (!post) return res.status(404).json({ error: 'Post no encontrado' });
 
@@ -216,6 +252,65 @@ async function addComment(req, res) {
     const { text, replyTo } = req.body;
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+
+    const oneMinAgo = new Date(Date.now() - 60 * 1000);
+    const [rateResult] = await Post.aggregate([
+      { $match: { comments: { $elemMatch: { user: req.user._id, createdAt: { $gte: oneMinAgo } } } } },
+      { $unwind: '$comments' },
+      { $match: { 'comments.user': req.user._id, 'comments.createdAt': { $gte: oneMinAgo } } },
+      { $count: 'total' },
+    ]);
+    if ((rateResult?.total || 0) >= 5)
+      return res.status(429).json({ error: 'Demasiados comentarios. Máximo 5 por minuto. Intenta de nuevo en un momento.' });
+
+    const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
+    const recentDocs = await Post.aggregate([
+      { $match: { comments: { $elemMatch: { user: req.user._id, createdAt: { $gte: tenMinAgo } } } } },
+      { $unwind: '$comments' },
+      { $match: { 'comments.user': req.user._id, 'comments.createdAt': { $gte: tenMinAgo } } },
+      { $sort: { 'comments.createdAt': -1 } },
+      { $limit: 10 },
+      { $project: { text: '$comments.text', _id: 0 } },
+    ]);
+    if (recentDocs.length > 0 && text?.trim()) {
+      const normNew = normalizeText(text.trim());
+      const newHash = hashText(normNew);
+      const spamCount = recentDocs.filter(c => {
+        const normOld = normalizeText(c.text);
+        return hashText(normOld) === newHash || levenshteinSimilarity(normNew, normOld) > 0.85;
+      }).length;
+      if (spamCount >= 2)
+        return res.status(429).json({ error: 'Comentario spam detectado. Evita repetir mensajes similares.' });
+    }
+
+    // 3.3 — Permiso de comentarios del post
+    if (post.commentPermission && post.commentPermission !== 'everyone') {
+      const userId   = req.user._id.toString();
+      const authorId = post.author.toString();
+      if (userId !== authorId) {
+        if (post.commentPermission === 'nobody')
+          return res.status(403).json({ error: 'Los comentarios están deshabilitados en esta publicación.' });
+        const author = await User.findById(post.author).select('following followers').lean();
+        if (post.commentPermission === 'following') {
+          if (!author.following.map(String).includes(userId))
+            return res.status(403).json({ error: 'Solo pueden comentar usuarios que el autor sigue.' });
+        } else if (post.commentPermission === 'friends') {
+          const authorFollows = author.following.map(String).includes(userId);
+          const followsAuthor = author.followers.map(String).includes(userId);
+          if (!authorFollows || !followsAuthor)
+            return res.status(403).json({ error: 'Solo pueden comentar amigos del autor.' });
+        }
+      }
+    }
+
+    // 3.5 — Bloqueo de enlaces externos (solo abyss.social permitido)
+    const URL_REGEX = /https?:\/\/[^\s]+/gi;
+    const urls = (text?.trim() || '').match(URL_REGEX) || [];
+    const ALLOWED = /^https?:\/\/(www\.)?abyss\.social(\/|$)/i;
+    for (const url of urls) {
+      if (!ALLOWED.test(url))
+        return res.status(400).json({ error: 'No se permiten enlaces externos. Solo se aceptan enlaces de abyss.social.' });
+    }
 
     const comment = { user: req.user._id, text: text.trim() };
     if (replyTo?.commentId) comment.replyTo = replyTo;

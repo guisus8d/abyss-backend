@@ -14,6 +14,7 @@ const commentSchema = new mongoose.Schema({
     username:  { type: String },
     text:      { type: String },
   },
+  reactions: [reactionSchema],
 });
 
 const postSchema = new mongoose.Schema({
@@ -27,6 +28,7 @@ const postSchema = new mongoose.Schema({
   group:          { type: mongoose.Schema.Types.ObjectId, ref: 'Group', default: null },
   reactions:      [reactionSchema],
   comments:       [commentSchema],
+  commentPermission: { type: String, enum: ['everyone', 'friends', 'following', 'nobody'], default: 'everyone' },
 }, { timestamps: true });
 
 postSchema.index({ author: 1, createdAt: -1 });

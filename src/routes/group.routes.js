@@ -37,6 +37,13 @@ router.post('/', authMiddleware, uploadAvatar.single('image'), async (req, res) 
     const { name, description, memberIds } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Nombre requerido' });
 
+    const adminGroupCount = await Group.countDocuments({
+      tipo: 'privado',
+      members: { $elemMatch: { user: req.user._id, role: 'admin' } },
+    });
+    if (adminGroupCount >= 10)
+      return res.status(400).json({ error: 'Has alcanzado el límite de 10 grupos privados como administrador. Elimina uno antes de crear otro.' });
+
     const me = await User.findById(req.user._id);
     const validIds = [...(me.followers || []).map(String), ...(me.following || []).map(String)];
     const parsedIds = JSON.parse(memberIds || '[]').filter(id => validIds.includes(String(id)));

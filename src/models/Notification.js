@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const notificationSchema = new mongoose.Schema({
   to:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   from:    { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  type:      { type: String, enum: ['like', 'comment', 'follow', 'chat_accepted', 'group_invite', 'mention', 'admin_transfer', 'admin_transfer_declined'], required: true },
+  type:      { type: String, enum: ['like', 'comment', 'follow', 'chat_accepted', 'group_invite', 'mention', 'admin_transfer', 'admin_transfer_declined', 'gift_received', 'gift_claimed'], required: true },
   post:      { type: mongoose.Schema.Types.ObjectId, ref: 'Post' },
   frame:     { type: mongoose.Schema.Types.ObjectId, ref: 'Frame' },
   text:      { type: String },

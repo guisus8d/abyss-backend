@@ -10,6 +10,7 @@ const Group          = require('../models/Group');
 const { reservarCoins, liberarEscrow, devolverEscrow } = require('../utils/coins');
 const { getIO } = require('../sockets');
 const { sendPush } = require('../utils/pushNotifications');
+const Notification = require('../models/Notification');
 
 const DIAS_EXPIRACION    = 30;
 const ITEM_TRANSFER_COST = 5;  // private frames only
@@ -355,18 +356,27 @@ router.post('/:id/claim', authMiddleware, async (req, res) => {
       getIO().to(roomKey).emit('gift:update', { giftId: String(gift._id), ...msgUpdate });
     } catch (_) {}
 
-    // Push notification al emisor (fuera de transacción, no bloquea la respuesta)
+    // Push + Notification al emisor (fuera de transacción, no bloquea la respuesta)
     try {
       if (String(gift.emisor) !== String(req.user._id)) {
         const [claimerDoc, emisorDoc] = await Promise.all([
           User.findById(req.user._id, 'username'),
           User.findById(gift.emisor, 'pushToken'),
         ]);
-        if (emisorDoc?.pushToken && claimerDoc?.username) {
+        if (claimerDoc?.username) {
           const body = allClaimed
             ? `@${claimerDoc.username} reclamó tu regalo — ¡regalo completado!`
             : `@${claimerDoc.username} reclamó tu regalo`;
-          sendPush(emisorDoc.pushToken, 'Regalo reclamado', body, { giftId: String(gift._id) });
+          await Notification.create({
+            to:   gift.emisor,
+            from: req.user._id,
+            type: 'gift_claimed',
+            text: body,
+          });
+          getIO().to(String(gift.emisor)).emit('notification:new');
+          if (emisorDoc?.pushToken) {
+            sendPush(emisorDoc.pushToken, 'Regalo reclamado', body, { giftId: String(gift._id) });
+          }
         }
       }
     } catch (_) {}

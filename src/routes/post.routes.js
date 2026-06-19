@@ -28,7 +28,7 @@ router.get('/search', authMiddleware, async (req, res) => {
     const posts = await Post.find({ $or: [{ content: regex }, { title: regex }] })
       .sort({ createdAt: -1 })
       .limit(20)
-      .populate('author', '_id username avatarUrl xp profileFrame profileFrameUrl role')
+      .populate('author', '_id username avatarUrl xp profileFrame profileFrameUrl role gender')
       .lean();
     res.json({ posts });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -39,7 +39,7 @@ router.get('/user/me',    authMiddleware, async (req, res) => {
   try {
     const posts = await Post.find({ author: req.user._id })
       .sort({ createdAt: -1 })
-      .populate('author', '_id username avatarUrl xp profileFrame profileFrameUrl role')
+      .populate('author', '_id username avatarUrl xp profileFrame profileFrameUrl role gender')
       .populate('comments.user', '_id username avatarUrl profileFrame profileFrameUrl role')
       .lean();
     res.json({ posts });
@@ -58,7 +58,7 @@ router.get('/user/:username', authMiddleware, async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit))
-        .populate('author', '_id username avatarUrl xp profileFrame profileFrameUrl role')
+        .populate('author', '_id username avatarUrl xp profileFrame profileFrameUrl role gender')
         .populate('comments.user', '_id username avatarUrl profileFrame profileFrameUrl role')
         .lean(),
       Post.countDocuments({ author: user._id }),
@@ -73,6 +73,55 @@ router.post('/:id/react',   authMiddleware, reactPost);
 router.post('/:id/comment', authMiddleware, commentRules, validate, addComment);
 router.delete('/:id',       authMiddleware, deletePost);
 
+// ── Ver quién reaccionó, agrupado por tipo ────────────────────────────────────
+router.get('/:id/reactions', authMiddleware, async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.id)
+      .select('reactions')
+      .populate('reactions.user', 'username avatarUrl profileFrame profileFrameUrl role');
+    if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+
+    const grouped = post.reactions.reduce((acc, r) => {
+      const key = r.type || 'like';
+      if (!acc[key]) acc[key] = [];
+      if (r.user) acc[key].push(r.user);
+      return acc;
+    }, {});
+
+    res.json({ reactions: grouped, total: post.reactions.length });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Reaccionar a un comentario ────────────────────────────────────────────────
+router.post('/:id/comment/:commentId/react', authMiddleware, async (req, res) => {
+  try {
+    const { type = '👍' } = req.body;
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ error: 'Post no encontrado' });
+
+    const comment = post.comments.id(req.params.commentId);
+    if (!comment) return res.status(404).json({ error: 'Comentario no encontrado' });
+
+    if (!comment.reactions) comment.reactions = [];
+    const existingIdx = comment.reactions.findIndex(
+      r => r.user.toString() === req.user._id.toString()
+    );
+    if (existingIdx >= 0) {
+      if (comment.reactions[existingIdx].type === type) {
+        comment.reactions.splice(existingIdx, 1);
+      } else {
+        comment.reactions[existingIdx].type = type;
+      }
+    } else {
+      comment.reactions.push({ user: req.user._id, type });
+    }
+
+    await post.save();
+    res.json({ reactions: comment.reactions });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Borrar comentario (autor del comentario, autor del post o mod) ─────────────
 router.delete('/:id/comment/:commentId', authMiddleware, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
@@ -81,9 +130,11 @@ router.delete('/:id/comment/:commentId', authMiddleware, async (req, res) => {
     const comment = post.comments.id(req.params.commentId);
     if (!comment) return res.status(404).json({ error: 'Comentario no encontrado' });
 
-    const isMod    = ['mod', 'admin'].includes(req.user.role);
-    const isOwner  = comment.user.toString() === req.user._id.toString();
-    if (!isOwner && !isMod) return res.status(403).json({ error: 'Sin permisos' });
+    const isMod        = ['mod', 'admin'].includes(req.user.role);
+    const isCommentOwner = comment.user.toString() === req.user._id.toString();
+    const isPostAuthor = post.author.toString() === req.user._id.toString();
+    if (!isCommentOwner && !isPostAuthor && !isMod)
+      return res.status(403).json({ error: 'Sin permisos' });
 
     post.comments = post.comments.filter(
       c =>
