@@ -87,11 +87,13 @@ const frameAllStorage = new CloudinaryStorage({
     if (file.fieldname === 'bgImage') return {
       folder:          'abbys/frame-bgs',
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+      resource_type:   'video',
       transformation:  [{ width: 1200, crop: 'limit', quality: 'auto:best' }],
     };
     if (file.fieldname === 'logo') return {
       folder:          'abbys/frame-logos',
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+      resource_type:   'video',
       transformation:  [{ width: 400, height: 400, crop: 'fill', gravity: 'center' }],
     };
     if (file.fieldname === 'pedestal') return {
