@@ -2,7 +2,7 @@ const router = require('express').Router();
 const Group  = require('../models/Group');
 const User   = require('../models/User');
 const { authMiddleware } = require('../middlewares/auth');
-const { uploadAvatar } = require('../config/cloudinary');
+const { uploadAvatar, uploadGroupBg } = require('../config/cloudinary');
 
 function getIO() {
   try { return require('../sockets').getIO(); } catch { return null; }
@@ -639,6 +639,53 @@ router.post('/:id/invite/decline', authMiddleware, async (req, res) => {
 
     await group.save();
     res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Historial de fotos del grupo — todos los miembros
+router.get('/:id/media/images', authMiddleware, async (req, res) => {
+  try {
+    const { page = 1, limit = 30 } = req.query;
+    const lim  = Math.min(Number(limit), 60);
+    const skip = (Number(page) - 1) * lim;
+    const group = await Group.findById(req.params.id)
+      .select('members messages')
+      .populate('messages.sender', 'username avatarUrl')
+      .lean();
+    if (!group) return res.status(404).json({ error: 'Grupo no encontrado' });
+    const isMember = group.members.some(m => (m.user?._id || m.user).toString() === req.user._id.toString());
+    if (!isMember) return res.status(403).json({ error: 'No eres miembro' });
+    const imgs = group.messages
+      .filter(m => m.type === 'image' && m.mediaUrl)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const total = imgs.length;
+    const paged = imgs.slice(skip, skip + lim).map(m => ({
+      _id: m._id, mediaUrl: m.mediaUrl, sender: m.sender, createdAt: m.createdAt,
+    }));
+    res.json({ images: paged, total, page: Number(page), pages: Math.ceil(total / lim) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Cambiar fondo del grupo — solo admin
+router.patch('/:id/background', authMiddleware, uploadGroupBg.single('file'), async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.id);
+    if (!group) return res.status(404).json({ error: 'Grupo no encontrado' });
+    const isAdmin = group.members.some(m => m.user.toString() === req.user._id.toString() && m.role === 'admin');
+    if (!isAdmin) return res.status(403).json({ error: 'Solo admins' });
+
+    if (req.file) {
+      group.backgroundUrl = req.file.path;
+    } else {
+      group.backgroundUrl = req.body.preset ?? null;
+    }
+
+    await group.save();
+    getIO()?.to(`group:${group._id}`).emit('group:background_updated', {
+      groupId:       group._id.toString(),
+      backgroundUrl: group.backgroundUrl,
+    });
+    res.json({ ok: true, backgroundUrl: group.backgroundUrl });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

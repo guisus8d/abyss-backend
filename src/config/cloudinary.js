@@ -133,6 +133,17 @@ const storeLogoStorage = new CloudinaryStorage({
 });
 const uploadStoreLogo = multer({ storage: storeLogoStorage, limits: { fileSize: 5 * 1024 * 1024 } });
 
+// ── Fondos de grupo ───────────────────────────────────────────────────────────
+const groupBgStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder:          'abbys/group-bgs',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation:  [{ width: 1080, crop: 'limit', quality: 'auto:best' }],
+  },
+});
+const uploadGroupBg = multer({ storage: groupBgStorage, limits: { fileSize: 8 * 1024 * 1024 } });
+
 // ── Audio ─────────────────────────────────────────────────────────────────────
 const audioStorage = new CloudinaryStorage({
   cloudinary,
@@ -147,6 +158,7 @@ const uploadAudio = multer({ storage: audioStorage, limits: { fileSize: 20 * 102
 module.exports = {
   cloudinary,
   uploadAvatar,
+  uploadGroupBg,
   uploadPost,
   uploadBanner,
   uploadCardBg,

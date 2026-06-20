@@ -67,6 +67,7 @@ const groupSchema = new mongoose.Schema({
   lastMessageSender: { type: String, default: '' },
   unreadCounts:    { type: Map, of: Number, default: {} },
   bannedUsers:     [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  backgroundUrl:   { type: String, default: null },
 }, { timestamps: true });
 
 groupSchema.index({ 'members.user': 1 });
