@@ -122,11 +122,23 @@ const modMiddleware = async (req, res, next) => {
 // ── Listar usuarios (mod) ──────────────────────────────────────────────────────
 router.get('/mod/users', authMiddleware, modMiddleware, async (req, res) => {
   try {
-    const { q } = req.query;
-    const users = await User.find(
-      q ? { username: { $regex: q, $options: 'i' } } : {}
-    ).select('username email avatarUrl role banned bannedReason createdAt xp').limit(50);
-    res.json({ users });
+    const { q, page = 1, limit = 20 } = req.query;
+    const lim    = Math.min(Number(limit), 100);
+    const skip   = (Number(page) - 1) * lim;
+    const filter = q ? { username: { $regex: q, $options: 'i' } } : {};
+
+    const [users, total, totalBanned, totalMods] = await Promise.all([
+      User.find(filter)
+        .select('username email avatarUrl role banned bannedReason createdAt xp')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(lim),
+      User.countDocuments(filter),
+      User.countDocuments({ banned: true }),
+      User.countDocuments({ role: { $in: ['mod', 'admin'] } }),
+    ]);
+
+    res.json({ users, total, totalBanned, totalMods, page: Number(page), pages: Math.ceil(total / lim) });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
