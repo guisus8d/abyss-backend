@@ -79,29 +79,32 @@ const uploadFrame = multer({ storage: frameStorage, limits: { fileSize: 5 * 1024
 const frameAllStorage = new CloudinaryStorage({
   cloudinary,
   params: async (req, file) => {
-    if (file.fieldname === 'image') return {
+    let result;
+    if (file.fieldname === 'image') result = {
       folder:          'abbys/frames',
       allowed_formats: ['png', 'webp'],
       resource_type:   'video',
     };
-    if (file.fieldname === 'bgImage') return {
+    else if (file.fieldname === 'bgImage') result = {
       folder:          'abbys/frame-bgs',
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
       resource_type:   'video',
       transformation:  [{ width: 1200, crop: 'limit', quality: 'auto:best' }],
     };
-    if (file.fieldname === 'logo') return {
+    else if (file.fieldname === 'logo') result = {
       folder:          'abbys/frame-logos',
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
       resource_type:   'video',
       transformation:  [{ width: 400, height: 400, crop: 'fill', gravity: 'center' }],
     };
-    if (file.fieldname === 'pedestal') return {
+    else if (file.fieldname === 'pedestal') result = {
       folder:          'abbys/frame-pedestals',
       allowed_formats: ['png', 'webp'],
       resource_type:   'video',
     };
-    return { folder: 'abbys/frames-misc' };
+    else result = { folder: 'abbys/frames-misc' };
+    console.log(`[FRAME-PARAMS] field=${file.fieldname} mime=${file.mimetype} resource_type=${result.resource_type} allowed=${JSON.stringify(result.allowed_formats)}`);
+    return result;
   },
 });
 const uploadFrameAll = multer({
