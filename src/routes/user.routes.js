@@ -122,10 +122,12 @@ const modMiddleware = async (req, res, next) => {
 // ── Listar usuarios (mod) ──────────────────────────────────────────────────────
 router.get('/mod/users', authMiddleware, modMiddleware, async (req, res) => {
   try {
-    const { q, page = 1, limit = 20 } = req.query;
+    const { q, page = 1, limit = 20, hideBots = 'true' } = req.query;
     const lim    = Math.min(Number(limit), 100);
     const skip   = (Number(page) - 1) * lim;
-    const filter = q ? { username: { $regex: q, $options: 'i' } } : {};
+    const filter = {};
+    if (q) filter.username = { $regex: q, $options: 'i' };
+    if (hideBots === 'true') filter.email = { $not: /@abbys\.bot$/ };
 
     const [users, total, totalBanned, totalMods] = await Promise.all([
       User.find(filter)
