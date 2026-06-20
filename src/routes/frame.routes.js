@@ -79,7 +79,10 @@ router.post('/', authMiddleware, (req, res, next) => {
   frameLog('POST /frames — multer start, content-type:', req.headers['content-type']);
   uploadFrameAll(req, res, (err) => {
     if (err) {
-      frameLog('MULTER ERROR:', err.message);
+      frameLog('MULTER ERROR message:', err.message);
+      frameLog('MULTER ERROR http_code:', err.http_code);
+      frameLog('MULTER ERROR name:', err.name);
+      frameLog('MULTER ERROR full:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
       return res.status(400).json({ error: `Error al subir imagen: ${err.message}` });
     }
     const mainFile = req.files?.image?.[0];

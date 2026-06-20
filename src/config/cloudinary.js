@@ -80,7 +80,7 @@ const frameStorage = new CloudinaryStorage({
   params: {
     folder:          'abbys/frames',
     allowed_formats: ['png', 'webp'],
-    resource_type:   'video',  // preserva WebP animado (todos los frames)
+    resource_type:   'auto',
   },
 });
 const uploadFrame = multer({ storage: frameStorage, limits: { fileSize: 5 * 1024 * 1024 } });
@@ -93,24 +93,24 @@ const frameAllStorage = new CloudinaryStorage({
     if (file.fieldname === 'image') result = {
       folder:          'abbys/frames',
       allowed_formats: ['png', 'webp'],
-      resource_type:   'video',
+      resource_type:   'auto',
     };
     else if (file.fieldname === 'bgImage') result = {
       folder:          'abbys/frame-bgs',
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-      resource_type:   'video',
+      resource_type:   'auto',
       transformation:  [{ width: 1200, crop: 'limit', quality: 'auto:best' }],
     };
     else if (file.fieldname === 'logo') result = {
       folder:          'abbys/frame-logos',
       allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
-      resource_type:   'video',
+      resource_type:   'auto',
       transformation:  [{ width: 400, height: 400, crop: 'fill', gravity: 'center' }],
     };
     else if (file.fieldname === 'pedestal') result = {
       folder:          'abbys/frame-pedestals',
       allowed_formats: ['png', 'webp'],
-      resource_type:   'video',
+      resource_type:   'auto',
     };
     else result = { folder: 'abbys/frames-misc' };
     return result;
