@@ -116,6 +116,56 @@ router.post('/:chatId/share-post', authMiddleware, async (req, res) => {
   }
 });
 
+// ── Historial de fotos de un chat ────────────────────────────────────────────
+router.get('/:chatId/media/images', authMiddleware, async (req, res) => {
+  try {
+    const { page = 1, limit = 30 } = req.query;
+    const lim  = Math.min(Number(limit), 60);
+    const skip = (Number(page) - 1) * lim;
+    const chat = await Chat.findById(req.params.chatId)
+      .select('participants messages')
+      .populate('messages.sender', 'username avatarUrl')
+      .lean();
+    if (!chat) return res.status(404).json({ error: 'Chat no encontrado' });
+    if (!chat.participants.some(p => p.toString() === req.user._id.toString()))
+      return res.status(403).json({ error: 'Sin acceso' });
+    const imgs = chat.messages
+      .filter(m => m.type === 'image' && m.mediaUrl)
+      .sort((a, b) => b.createdAt - a.createdAt);
+    const total  = imgs.length;
+    const paged  = imgs.slice(skip, skip + lim).map(m => ({
+      _id: m._id, mediaUrl: m.mediaUrl,
+      sender: m.sender, createdAt: m.createdAt,
+    }));
+    res.json({ images: paged, total, page: Number(page), pages: Math.ceil(total / lim) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Historial de audios de un chat ────────────────────────────────────────────
+router.get('/:chatId/media/audios', authMiddleware, async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    const lim  = Math.min(Number(limit), 50);
+    const skip = (Number(page) - 1) * lim;
+    const chat = await Chat.findById(req.params.chatId)
+      .select('participants messages')
+      .populate('messages.sender', 'username avatarUrl')
+      .lean();
+    if (!chat) return res.status(404).json({ error: 'Chat no encontrado' });
+    if (!chat.participants.some(p => p.toString() === req.user._id.toString()))
+      return res.status(403).json({ error: 'Sin acceso' });
+    const audios = chat.messages
+      .filter(m => m.type === 'audio' && m.mediaUrl)
+      .sort((a, b) => b.createdAt - a.createdAt);
+    const total = audios.length;
+    const paged = audios.slice(skip, skip + lim).map(m => ({
+      _id: m._id, mediaUrl: m.mediaUrl, audioDuration: m.audioDuration,
+      sender: m.sender, createdAt: m.createdAt,
+    }));
+    res.json({ audios: paged, total, page: Number(page), pages: Math.ceil(total / lim) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Mensajes de un chat — AL FINAL (/:chatId captura todo) ───────────────────
 router.get('/:chatId/messages', authMiddleware, getChatMessages);
 
