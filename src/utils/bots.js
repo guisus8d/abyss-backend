@@ -4,24 +4,47 @@ const axios = require('axios');
 const BASE_URL = process.env.API_URL || 'http://localhost:3000/api';
 
 const BOTS = [
+  // ── Bots originales (postean, reaccionan, comentan) ──────────────────────
   {
     username: 'abbys_neural',
     email:    'neural@abbys.bot',
     password: 'b0tS3cur3!1',
-    personality: 'introspective', // piensa mucho, escribe poco
+    personality: 'introspective',
   },
   {
     username: 'void_echo',
     email:    'echo@abbys.bot',
     password: 'b0tS3cur3!2',
-    personality: 'chaotic', // escribe cosas random a horas raras
+    personality: 'chaotic',
   },
   {
     username: 'cypher_ghost',
     email:    'cypher@abbys.bot',
     password: 'b0tS3cur3!3',
-    personality: 'social', // comenta y reacciona más que postea
+    personality: 'social',
   },
+
+  // ── Bots nuevos (solo like y follow — no postean, no comentan) ───────────
+  { username: 'camila_mv',    email: 'camila.mv@abbys.bot',    password: 'cMv#7xTq9!Ln3Z', likeOnly: true },
+  { username: 'rodrigo_vx',   email: 'rodrigo.vx@abbys.bot',   password: 'rVx$2kPm5@Bw8Y', likeOnly: true },
+  { username: 'valentina_ok', email: 'valentina.ok@abbys.bot', password: 'vOk!8nRs3#Jq1F', likeOnly: true },
+  { username: 'mateo_lz',     email: 'mateo.lz@abbys.bot',     password: 'mLz%6hYp1@Dt4C', likeOnly: true },
+  { username: 'daniela_rr',   email: 'daniela.rr@abbys.bot',   password: 'dRr#4cXw7!Fv2S', likeOnly: true },
+  { username: 'sebastian_fw', email: 'sebastian.fw@abbys.bot', password: 'sFw$9mZk2@Hb6T', likeOnly: true },
+  { username: 'lucia_bp',     email: 'lucia.bp@abbys.bot',     password: 'lBp!5tNq8#Gx0R', likeOnly: true },
+  { username: 'andres_tm',    email: 'andres.tm@abbys.bot',     password: 'aTm%3vWs6@Kj9D', likeOnly: true },
+  { username: 'isabella_cn',  email: 'isabella.cn@abbys.bot',  password: 'iCn#1xPr4!Mw7H', likeOnly: true },
+  { username: 'felipe_qr',    email: 'felipe.qr@abbys.bot',    password: 'fQr$7bYh9@Ls5E', likeOnly: true },
+  { username: 'mariana_js',   email: 'mariana.js@abbys.bot',   password: 'mJs!2nTv5#Rx3A', likeOnly: true },
+  { username: 'nicolas_hv',   email: 'nicolas.hv@abbys.bot',   password: 'nHv%8cZm3@Pk1W', likeOnly: true },
+  { username: 'sofia_dk',     email: 'sofia.dk@abbys.bot',     password: 'sDk#6qWb1!Yt4N', likeOnly: true },
+  { username: 'gabriel_pw',   email: 'gabriel.pw@abbys.bot',   password: 'gPw$4hXs7@Nf2Q', likeOnly: true },
+  { username: 'alejandra_nt', email: 'alejandra.nt@abbys.bot', password: 'aNt!9vKp2#Qm6L', likeOnly: true },
+  { username: 'emilio_yx',    email: 'emilio.yx@abbys.bot',    password: 'eYx%5tBr8@Jc0P', likeOnly: true },
+  { username: 'natalia_gc',   email: 'natalia.gc@abbys.bot',   password: 'nGc#3mLw6!Sv7U', likeOnly: true },
+  { username: 'jorge_ab',     email: 'jorge.ab@abbys.bot',     password: 'jAb$1xYq4@Th8V', likeOnly: true },
+  { username: 'paula_rf',     email: 'paula.rf@abbys.bot',     password: 'pRf!7nZs9#Bk2X', likeOnly: true },
+  { username: 'diego_sf',     email: 'diego.sf@abbys.bot',     password: 'dSf%2cPr5@Wx6M', likeOnly: true },
 ];
 
 // Posts por personalidad — más largos, más humanos, con typos ocasionales
@@ -151,6 +174,7 @@ async function botPost() {
   if (!isHumanHour()) return;
 
   const bot   = pick(BOTS);
+  if (bot.likeOnly) return;             // bots nuevos no postean
   const token = botTokens[bot.username] || await loginBot(bot);
   if (!token) return;
 
@@ -206,13 +230,15 @@ async function botReact() {
 
         await axios.post(`${BASE_URL}/posts/${post._id}/react`, { type }, auth(token)).catch(() => {});
 
-        // Comentar con probabilidad según personalidad
-        const commentChance = bot.personality === 'social' ? 0.5 : bot.personality === 'chaotic' ? 0.3 : 0.2;
-        if (Math.random() < commentChance) {
-          await humanDelay(8, 40); // piensa el comentario
-          const text = pick(COMMENTS[bot.personality]);
-          await axios.post(`${BASE_URL}/posts/${post._id}/comment`, { text }, auth(token)).catch(() => {});
-          console.log(`💬 [${bot.username}] comentó en post de ${post.author?.username}`);
+        // Comentar solo si el bot tiene personalidad (no likeOnly)
+        if (!bot.likeOnly) {
+          const commentChance = bot.personality === 'social' ? 0.5 : bot.personality === 'chaotic' ? 0.3 : 0.2;
+          if (Math.random() < commentChance) {
+            await humanDelay(8, 40);
+            const text = pick(COMMENTS[bot.personality]);
+            await axios.post(`${BASE_URL}/posts/${post._id}/comment`, { text }, auth(token)).catch(() => {});
+            console.log(`💬 [${bot.username}] comentó en post de ${post.author?.username}`);
+          }
         }
       }
     } catch (err) {
