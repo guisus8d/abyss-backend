@@ -8,24 +8,6 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// multer-storage-cloudinary v4 calls upload_stream(opts, callback) but
-// Cloudinary v1 expects upload_stream(callback, opts). Patch the prototype
-// once here — before any instances are created — so ALL CloudinaryStorage
-// instances in the entire app (including those in other route files) use
-// the correct argument order. Without this, Cloudinary tries to call the
-// opts object as a function when the HTTP response arrives, throwing
-// "TypeError: callback is not a function" and crashing the Node process.
-CloudinaryStorage.prototype.upload = function (opts, file) {
-  const cld = this.cloudinary;
-  return new Promise((resolve, reject) => {
-    const stream = cld.uploader.upload_stream(
-      (err, response) => err != null ? reject(err) : resolve(response),
-      opts,
-    );
-    file.stream.pipe(stream);
-  });
-};
-
 // ── Avatares ──────────────────────────────────────────────────────────────────
 const avatarStorage = new CloudinaryStorage({
   cloudinary,
