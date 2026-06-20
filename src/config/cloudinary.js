@@ -8,6 +8,16 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+// Intercept upload_stream to log exact params before Cloudinary receives them.
+// Temporary diagnostic — remove after investigation.
+const _origUploadStream = cloudinary.uploader.upload_stream.bind(cloudinary.uploader);
+cloudinary.uploader.upload_stream = function (...args) {
+  console.log('[CLD-INTERCEPT] upload_stream called — arg[0] type:', typeof args[0], '| arg[1] type:', typeof args[1]);
+  console.log('[CLD-INTERCEPT] arg[0] value:', JSON.stringify(args[0]));
+  console.log('[CLD-INTERCEPT] arg[1] value:', typeof args[1] === 'function' ? '<function>' : JSON.stringify(args[1]));
+  return _origUploadStream(...args);
+};
+
 // ── Avatares ──────────────────────────────────────────────────────────────────
 const avatarStorage = new CloudinaryStorage({
   cloudinary,
