@@ -126,7 +126,7 @@ function initSockets(server) {
         chat.lastMessageText =
           type === 'image' ? '[Imagen]' :
           type === 'audio' ? '[Audio]'  :
-          type === 'gift'  ? '🎁 Nuevo regalo disponible' :
+          type === 'gift'  ? 'Nuevo regalo disponible' :
           text?.trim() || '';
 
         chat.participants.forEach(p => {
@@ -194,14 +194,22 @@ function initSockets(server) {
 
     socket.on('group:message', async ({ groupId, text, type, mediaUrl, audioDuration, replyTo, giftId, giftData }) => {
       try {
-        if (!text?.trim() && !mediaUrl && type !== 'gift') return;
+        console.log('[DEBUG][group:message] received — socketUserId:', socket.userId, 'groupId:', groupId, 'type:', type, 'text:', text?.slice(0,40));
+
+        if (!text?.trim() && !mediaUrl && type !== 'gift') {
+          console.log('[DEBUG][group:message] early return: empty payload');
+          return;
+        }
 
         const group = await Group.findOne({
           _id: groupId,
           'members.user': socket.userId,
           bannedUsers: { $ne: socket.userId },
         });
-        if (!group) return;
+        if (!group) {
+          console.log('[DEBUG][group:message] early return: group not found for userId:', socket.userId, 'groupId:', groupId);
+          return;
+        }
 
         const message = {
           sender:        socket.userId,
