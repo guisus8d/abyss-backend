@@ -10,6 +10,17 @@ const { connectRedis } = require('./config/redis');
 const { initSockets } = require('./sockets');
 const routes = require('./routes');
 
+// A single bad upload must NEVER crash the whole process. Cloudinary's HTTP
+// response handler fires outside any Promise/Express boundary, so errors
+// there become uncaughtExceptions. We log and continue — the failed request
+// already rejected its multer Promise and returned a 400 to that user.
+process.on('uncaughtException', (err) => {
+  console.error('[PROCESS] uncaughtException (server continues):', err.message);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[PROCESS] unhandledRejection:', reason?.message || reason);
+});
+
 const app = express();
 const server = http.createServer(app);
 
