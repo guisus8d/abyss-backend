@@ -151,6 +151,8 @@ router.post('/:id/add-members', authMiddleware, async (req, res) => {
 
     for (const id of toAdd) {
       group.members.push({ user: id, role: 'member' });
+      // If user was previously banned, clear the ban so they can talk
+      group.bannedUsers = group.bannedUsers.filter(b => b.toString() !== String(id));
     }
     await group.save();
     await group.populate('members.user', 'username avatarUrl profileFrame profileFrameUrl');
@@ -490,6 +492,11 @@ router.delete('/:id/ban/:userId', authMiddleware, async (req, res) => {
     const isAdmin = group.members.some(m => m.user.toString() === req.user._id.toString() && m.role === 'admin');
     if (!isAdmin) return res.status(403).json({ error: 'Solo admins' });
     group.bannedUsers = group.bannedUsers.filter(b => b.toString() !== req.params.userId);
+    // Re-add to members if not already there (ban removes them)
+    const alreadyMember = group.members.some(m => m.user.toString() === req.params.userId);
+    if (!alreadyMember) {
+      group.members.push({ user: req.params.userId, role: 'member' });
+    }
     await group.save();
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }

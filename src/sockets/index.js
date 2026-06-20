@@ -194,22 +194,14 @@ function initSockets(server) {
 
     socket.on('group:message', async ({ groupId, text, type, mediaUrl, audioDuration, replyTo, giftId, giftData }) => {
       try {
-        console.log('[DEBUG][group:message] received — socketUserId:', socket.userId, 'groupId:', groupId, 'type:', type, 'text:', text?.slice(0,40));
-
-        if (!text?.trim() && !mediaUrl && type !== 'gift') {
-          console.log('[DEBUG][group:message] early return: empty payload');
-          return;
-        }
+        if (!text?.trim() && !mediaUrl && type !== 'gift') return;
 
         const group = await Group.findOne({
           _id: groupId,
           'members.user': socket.userId,
           bannedUsers: { $ne: socket.userId },
         });
-        if (!group) {
-          console.log('[DEBUG][group:message] early return: group not found for userId:', socket.userId, 'groupId:', groupId);
-          return;
-        }
+        if (!group) return;
 
         const message = {
           sender:        socket.userId,
