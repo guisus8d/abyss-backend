@@ -103,10 +103,26 @@ const frameAllStorage = new CloudinaryStorage({
       resource_type:   'video',
     };
     else result = { folder: 'abbys/frames-misc' };
-    console.log(`[FRAME-PARAMS] field=${file.fieldname} mime=${file.mimetype} resource_type=${result.resource_type} allowed=${JSON.stringify(result.allowed_formats)}`);
     return result;
   },
 });
+
+// multer-storage-cloudinary v4 calls upload_stream(opts, callback) but
+// Cloudinary v1 expects upload_stream(callback, opts) — swap args so
+// resource_type and all other params actually reach the API.
+frameAllStorage.upload = function (opts, file) {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      (err, response) => {
+        if (err != null) return reject(err);
+        return resolve(response);
+      },
+      opts,
+    );
+    file.stream.pipe(stream);
+  });
+};
+
 const uploadFrameAll = multer({
   storage: frameAllStorage,
   limits: { fileSize: 15 * 1024 * 1024 },
