@@ -35,7 +35,9 @@ const userSchema = new mongoose.Schema({
   followers:        [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   blocked:          [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   lastActive: { type: Date, default: Date.now },
-  pushToken:  { type: String, default: null },
+  pushToken:           { type: String,  default: null },
+  isCreator:           { type: Boolean, default: false },
+  creatorBonusGranted: { type: Boolean, default: false },
 }, { timestamps: true });
 
 // ✅ FIX: separado en dos responsabilidades claras

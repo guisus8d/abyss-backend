@@ -108,7 +108,7 @@ router.post('/', authMiddleware, (req, res, next) => {
 
     frameLog(`user xp=${user.xp} coins=${user.coins} pkgCost=${pkgCost} pkgUnits=${pkgUnits}`);
 
-    if (user.xp < XP_MINIMO)
+    if (user.xp < XP_MINIMO && !user.isCreator)
       throw Object.assign(new Error(`Necesitas ${XP_MINIMO} XP para crear marcos`), { status: 403 });
     if (user.coins < pkgCost)
       throw Object.assign(new Error(`Necesitas ${pkgCost} monedas`), { status: 400 });

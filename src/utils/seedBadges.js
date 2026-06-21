@@ -4,7 +4,8 @@ const BADGES = [
   { name: 'Primer Post',  icon: '✍️',  type: 'participation', description: 'Publicaste tu primer post' },
   { name: 'Activo',       icon: '🔥',  type: 'participation', description: '10 posts publicados' },
   { name: 'Veterano',     icon: '⭐',  type: 'seniority',     description: 'Miembro por 30 días' },
-  { name: 'Fundador',     icon: '🏆',  type: 'seniority',     description: 'Uno de los primeros miembros' },
+  { name: 'Fundador',       icon: '🏆',  type: 'seniority',     description: 'Uno de los primeros miembros' },
+  { name: 'Creador de Marcos', icon: '🎨', type: 'special_event', description: 'Creador oficial de marcos de Abyss' },
 ];
 
 async function seedBadges() {

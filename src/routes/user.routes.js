@@ -131,7 +131,7 @@ router.get('/mod/users', authMiddleware, modMiddleware, async (req, res) => {
 
     const [users, total, totalBanned, totalMods] = await Promise.all([
       User.find(filter)
-        .select('username email avatarUrl role banned bannedReason createdAt xp')
+        .select('username email avatarUrl role banned bannedReason createdAt xp isCreator')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(lim),
@@ -202,6 +202,45 @@ router.post('/mod/setrole/:userId', authMiddleware, async (req, res) => {
     const user = await User.findByIdAndUpdate(req.params.userId, { role }, { new: true });
     await ModLog.create({ action: 'change_role', mod: req.user._id, target: before._id, details: { oldRole: before.role, newRole: role, username: before.username } });
     res.json({ user });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Otorgar rol de Creador (solo admin) ───────────────────────────────────────
+router.post('/mod/grantcreator/:userId', authMiddleware, async (req, res) => {
+  try {
+    if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Solo admins' });
+
+    const target = await User.findById(req.params.userId);
+    if (!target) return res.status(404).json({ error: 'Usuario no encontrado' });
+    if (target.role === 'admin') return res.status(403).json({ error: 'No aplica para admins' });
+
+    target.isCreator = true;
+
+    if (target.xp < 100) target.xp = 100;
+
+    let coinsGranted = false;
+    if (!target.creatorBonusGranted) {
+      target.coins += 500;
+      target.creatorBonusGranted = true;
+      coinsGranted = true;
+    }
+
+    const Badge = require('../models/Badge');
+    const badge = await Badge.findOne({ name: 'Creador de Marcos' });
+    if (badge && !target.badges.some(b => b.toString() === badge._id.toString())) {
+      target.badges.push(badge._id);
+    }
+
+    await target.save();
+
+    await ModLog.create({
+      action:  'grant_creator',
+      mod:     req.user._id,
+      target:  target._id,
+      details: { username: target.username, coinsGranted },
+    });
+
+    res.json({ ok: true, coinsGranted, user: { _id: target._id, username: target.username, isCreator: true } });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

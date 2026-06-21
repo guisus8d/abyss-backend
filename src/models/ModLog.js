@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const modLogSchema = new mongoose.Schema({
-  action:  { type: String, enum: ['ban', 'unban', 'delete_post', 'change_role'], required: true },
+  action:  { type: String, enum: ['ban', 'unban', 'delete_post', 'change_role', 'grant_creator'], required: true },
   mod:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   target:  { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   details: { type: Object, default: {} },
