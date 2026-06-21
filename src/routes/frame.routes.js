@@ -207,6 +207,27 @@ router.patch('/:id/listing', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── DELETE /frames/my/:frameId — eliminar marco de la colección (sin reembolso) ─
+router.delete('/my/:frameId', authMiddleware, async (req, res) => {
+  try {
+    const ownership = await FrameOwnership.findOne({ user: req.user._id, frame: req.params.frameId });
+    if (!ownership) return res.status(404).json({ error: 'Marco no encontrado en tu colección' });
+
+    await ownership.deleteOne();
+
+    let profileCleared = false;
+    const user = await User.findById(req.user._id);
+    if (String(user.profileFrame) === String(req.params.frameId)) {
+      user.profileFrame    = 'default';
+      user.profileFrameUrl = null;
+      await user.save();
+      profileCleared = true;
+    }
+
+    res.json({ message: 'Marco eliminado de tu colección', profileCleared });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── DELETE /frames/:id/listing — retirar marco del mercado ──────────────────
 router.delete('/:id/listing', authMiddleware, async (req, res) => {
   try {
