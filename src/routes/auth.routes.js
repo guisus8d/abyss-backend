@@ -2,6 +2,7 @@ const router        = require('express').Router();
 const jwt           = require('jsonwebtoken');
 const crypto        = require('crypto');
 const bcrypt        = require('bcryptjs');
+const rateLimit     = require('express-rate-limit');
 const { Resend }    = require('resend');
 const { OAuth2Client } = require('google-auth-library');
 const User          = require('../models/User');
@@ -15,6 +16,14 @@ const { register, login } = require('../controllers/auth.controller');
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 function getIO() { try { return require('../sockets').getIO(); } catch { return null; } }
 
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas cuentas creadas desde esta IP. Intenta de nuevo en 1 hora.' },
+});
+
 async function checkRateLimit(userId, purpose, maxPerHour) {
   const since = new Date(Date.now() - 60 * 60 * 1000);
   const count = await PasswordResetToken.countDocuments({ userId, purpose, createdAt: { $gte: since } });
@@ -22,7 +31,7 @@ async function checkRateLimit(userId, purpose, maxPerHour) {
 }
 
 // ── Email / password ──────────────────────────────────────────────────────────
-router.post('/register', uploadAvatar.single('avatar'), registerRules, validate, register);
+router.post('/register', registerLimiter, uploadAvatar.single('avatar'), registerRules, validate, register);
 router.post('/login',    loginRules, validate, login);
 
 // ── Google OAuth ──────────────────────────────────────────────────────────────
