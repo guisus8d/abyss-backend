@@ -53,7 +53,7 @@ router.get('/frames', optionalAuth, async (req, res) => {
 router.get('/frames/:id', optionalAuth, async (req, res) => {
   try {
     const frame = await Frame.findById(req.params.id)
-      .populate('creator', 'username avatarUrl profileFrame profileFrameUrl xp gender');
+      .populate('creator', 'username avatarUrl profileFrame profileFrameUrl xp gender isCreator');
     if (!frame) return res.status(404).json({ error: 'Marco no encontrado' });
 
     const ownership = req.user
@@ -187,7 +187,7 @@ router.get('/frames/:id/comments', authMiddleware, async (req, res) => {
   try {
     const frame = await Frame.findById(req.params.id)
       .select('comments commentsCount')
-      .populate('comments.user', 'username avatarUrl profileFrame profileFrameUrl gender');
+      .populate('comments.user', 'username avatarUrl profileFrame profileFrameUrl gender isCreator');
     if (!frame) return res.status(404).json({ error: 'Marco no encontrado' });
 
     const comments = frame.comments.slice().reverse();
@@ -228,7 +228,7 @@ router.post('/frames/:id/comment', authMiddleware, async (req, res) => {
       getIO().to(String(frame.creator._id)).emit('notification');
     }
 
-    const poster     = await User.findById(req.user._id).select('username avatarUrl profileFrame profileFrameUrl gender');
+    const poster     = await User.findById(req.user._id).select('username avatarUrl profileFrame profileFrameUrl gender isCreator');
     const newComment = frame.comments[frame.comments.length - 1];
     res.status(201).json({
       comment:       { ...newComment.toObject(), user: poster },

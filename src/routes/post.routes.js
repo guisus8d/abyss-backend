@@ -28,7 +28,7 @@ router.get('/search', authMiddleware, async (req, res) => {
     const posts = await Post.find({ $or: [{ content: regex }, { title: regex }] })
       .sort({ createdAt: -1 })
       .limit(20)
-      .populate('author', '_id username avatarUrl xp profileFrame profileFrameUrl role gender')
+      .populate('author', '_id username avatarUrl xp profileFrame profileFrameUrl role gender isCreator')
       .lean();
     res.json({ posts });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -39,7 +39,7 @@ router.get('/user/me',    authMiddleware, async (req, res) => {
   try {
     const posts = await Post.find({ author: req.user._id })
       .sort({ createdAt: -1 })
-      .populate('author', '_id username avatarUrl xp profileFrame profileFrameUrl role gender')
+      .populate('author', '_id username avatarUrl xp profileFrame profileFrameUrl role gender isCreator')
       .populate('comments.user', '_id username avatarUrl profileFrame profileFrameUrl role')
       .lean();
     res.json({ posts });
@@ -58,8 +58,8 @@ router.get('/user/:username', authMiddleware, async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit))
-        .populate('author', '_id username avatarUrl xp profileFrame profileFrameUrl role gender')
-        .populate('comments.user', '_id username avatarUrl profileFrame profileFrameUrl role gender')
+        .populate('author', '_id username avatarUrl xp profileFrame profileFrameUrl role gender isCreator')
+        .populate('comments.user', '_id username avatarUrl profileFrame profileFrameUrl role gender isCreator')
         .lean(),
       Post.countDocuments({ author: user._id }),
     ]);
@@ -78,7 +78,7 @@ router.get('/:id/reactions', authMiddleware, async (req, res) => {
   try {
     const post = await Post.findById(req.params.id)
       .select('reactions')
-      .populate('reactions.user', 'username avatarUrl profileFrame profileFrameUrl role gender');
+      .populate('reactions.user', 'username avatarUrl profileFrame profileFrameUrl role gender isCreator');
     if (!post) return res.status(404).json({ error: 'Post no encontrado' });
 
     const grouped = post.reactions.reduce((acc, r) => {
@@ -143,7 +143,7 @@ router.delete('/:id/comment/:commentId', authMiddleware, async (req, res) => {
     );
 
     await post.save();
-    await post.populate('comments.user', 'username avatarUrl profileFrame profileFrameUrl role gender');
+    await post.populate('comments.user', 'username avatarUrl profileFrame profileFrameUrl role gender isCreator');
     res.json({ comments: post.comments });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
