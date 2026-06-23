@@ -70,6 +70,7 @@ const groupSchema = new mongoose.Schema({
   backgroundUrl:   { type: String, default: null },
   isCircle:        { type: Boolean, default: false },
   isPublic:        { type: Boolean, default: false },
+  isActive:        { type: Boolean, default: true },
   hashtags:        [{ type: String }],
   membersCount:    { type: Number,  default: 0 },
 }, { timestamps: true });

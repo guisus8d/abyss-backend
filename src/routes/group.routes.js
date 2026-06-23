@@ -56,9 +56,39 @@ router.post('/circles', authMiddleware, uploadAvatar.single('image'), async (req
 router.get('/circles/mine', authMiddleware, async (req, res) => {
   try {
     const circles = await Group.find({ isCircle: true, 'members.user': req.user._id })
-      .select('name description imageUrl hashtags membersCount members lastMessage lastMessageText lastMessageSender unreadCounts creator isCircle isPublic')
+      .select('name description imageUrl hashtags membersCount members lastMessage lastMessageText lastMessageSender unreadCounts creator isCircle isPublic isActive')
+      .populate('members.user', 'username avatarUrl')
       .sort({ lastMessage: -1 });
     res.json({ circles });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Fiestas públicas y activas (sin auth requerida)
+router.get('/circles/public', async (req, res) => {
+  try {
+    const circles = await Group
+      .find({ isCircle: true, isPublic: true, isActive: true })
+      .sort({ membersCount: -1 })
+      .limit(10)
+      .select('name imageUrl membersCount hashtags isCircle isPublic isActive');
+    res.json({ circles });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Activar / desactivar círculo (solo admin)
+router.patch('/circles/:id/toggle-active', authMiddleware, async (req, res) => {
+  try {
+    const circle = await Group.findOne({ _id: req.params.id, isCircle: true });
+    if (!circle) return res.status(404).json({ error: 'Círculo no encontrado' });
+
+    const isAdmin = circle.members.some(
+      m => m.user.toString() === req.user._id.toString() && m.role === 'admin'
+    );
+    if (!isAdmin) return res.status(403).json({ error: 'Solo el administrador puede cambiar el estado' });
+
+    circle.isActive = !circle.isActive;
+    await circle.save();
+    res.json({ group: circle });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
