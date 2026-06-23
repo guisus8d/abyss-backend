@@ -105,8 +105,13 @@ router.post('/circles/:id/join', authMiddleware, async (req, res) => {
     circle.membersCount = circle.members.length;
     await circle.save();
 
+    const joiningUser = await User.findById(req.user._id).select('username').lean();
+    if (joiningUser) {
+      await emitSystemMessage(circle, `✨ ${joiningUser.username} se unió a la fiesta`, 'join');
+    }
+
     const populated = await Group.findById(circle._id)
-      .select('name description imageUrl hashtags membersCount members lastMessage lastMessageText creator isCircle isPublic');
+      .select('name description imageUrl hashtags membersCount members lastMessage lastMessageText creator isCircle isPublic isActive');
     res.json({ group: populated });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -370,7 +375,10 @@ router.post('/:id/leave', authMiddleware, async (req, res) => {
     await group.save();
 
     if (leavingUser) {
-      await emitSystemMessage(group, `${leavingUser.username} salio del grupo`, 'leave');
+      const leaveText = group.isCircle
+        ? `${leavingUser.username} salió de la fiesta`
+        : `${leavingUser.username} salio del grupo`;
+      await emitSystemMessage(group, leaveText, 'leave');
     }
     if (newAdminUser) {
       await emitSystemMessage(group, `${newAdminUser.username} es el nuevo administrador`, 'new_admin');
