@@ -107,7 +107,7 @@ router.post('/circles/:id/join', authMiddleware, async (req, res) => {
 
     const joiningUser = await User.findById(req.user._id).select('username').lean();
     if (joiningUser) {
-      await emitSystemMessage(circle, `✨ ${joiningUser.username} se unió a la fiesta`, 'join');
+      await emitSystemMessage(circle, `${joiningUser.username} se unió a la fiesta`, 'join');
     }
 
     const populated = await Group.findById(circle._id)

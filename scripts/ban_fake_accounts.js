@@ -15,13 +15,20 @@ const readline = require('readline');
 
 // field: campo de User sobre el que se aplica el regex (default 'username')
 // field: campo de User sobre el que se aplica el regex (default 'username')
+// field: campo de User sobre el que se aplica el regex (default 'username')
 const FAKE_PATTERNS = [
-  { label: 'fld+dígitos',      field: 'username', regex: /^fld\d+$/           },
-  { label: 'flood+dígitos',    field: 'username', regex: /^flood\d+$/          },
-  { label: 'teste+dígitos',    field: 'username', regex: /^teste\d+$/          },
-  { label: 'p+dígitos',        field: 'username', regex: /^p\d+$/              },
-  { label: 'email @tmp.xyz',   field: 'email',    regex: /@tmp\.xyz$/i         },
-  { label: 'email p####@gmail', field: 'email',   regex: /^p\d+@gmail\.com$/i  },
+  { label: 'fld+dígitos',       field: 'username', regex: /^fld\d+$/           },
+  { label: 'flood+dígitos',     field: 'username', regex: /^flood\d+$/          },
+  { label: 'teste+dígitos',     field: 'username', regex: /^teste\d+$/          },
+  { label: 'p+dígitos',         field: 'username', regex: /^p\d+$/              },
+  { label: 'n+dígitos',         field: 'username', regex: /^n\d+$/              },
+  { label: 'abyss+dígitos',     field: 'username', regex: /^abyss\d+$/          },
+  { label: 'gold+dígitos',      field: 'username', regex: /^gold\d+$/           },
+  { label: 'farm+dígitos',      field: 'username', regex: /^farm\d+$/           },
+  { label: 'x+dígitos',         field: 'username', regex: /^x\d+$/              },
+  { label: 'conta+dígitos',     field: 'username', regex: /^conta\d+$/          },
+  { label: 'email @tmp.xyz',    field: 'email',    regex: /@tmp\.xyz$/i         },
+  { label: 'email p####@gmail', field: 'email',    regex: /^p\d+@gmail\.com$/i  },
 ];
 
 // ── helpers ──────────────────────────────────────────────────────────────────

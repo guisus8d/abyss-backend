@@ -119,7 +119,7 @@ const frameAllStorage = new CloudinaryStorage({
 
 const uploadFrameAll = multer({
   storage: frameAllStorage,
-  limits: { fileSize: 15 * 1024 * 1024 },
+  limits: { fileSize: 20 * 1024 * 1024 },
 }).fields([
   { name: 'image',    maxCount: 1 },
   { name: 'bgImage',  maxCount: 1 },
