@@ -11,6 +11,8 @@ const userSchema = new mongoose.Schema({
   passwordHash:     { type: String, required: true },
   gender:           { type: String, enum: ['hombre', 'mujer', 'no-binario', 'prefiero-no-decir'], default: 'prefiero-no-decir' },
   bio:              { type: String, default: '' },
+  bioType:          { type: String, enum: ['text', 'audio'], default: null },
+  bioAudioUrl:      { type: String, default: null },
   profileText:      { type: String, default: '' },
   profileBanner:    { type: String, default: '' },
   profileBannerType:{ type: String, default: 'color' },
@@ -38,6 +40,7 @@ const userSchema = new mongoose.Schema({
   pushToken:           { type: String,  default: null },
   isCreator:           { type: Boolean, default: false },
   creatorBonusGranted: { type: Boolean, default: false },
+  wallPermission:      { type: String, enum: ['everyone', 'following', 'followers'], default: 'everyone' },
 }, { timestamps: true });
 
 // ✅ FIX: separado en dos responsabilidades claras

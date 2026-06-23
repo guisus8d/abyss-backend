@@ -28,25 +28,29 @@ async function updateProfile(req, res) {
     const {
       displayName,
       profileFrame, profileFrameUrl,
-      bio, username, profileText,
+      bio, bioType, bioAudioUrl,
+      username, profileText,
       profileBg, profileBgType,
       profileBanner, profileBannerType
     } = req.body;
 
     const update = {};
 
-    if (displayName !== undefined) update.displayName = displayName; // ← NUEVO
-    if (profileFrame) update.profileFrame = profileFrame;
+    if (displayName !== undefined)  update.displayName  = displayName;
+    if (profileFrame)               update.profileFrame = profileFrame;
     if (profileFrameUrl !== undefined) update.profileFrameUrl = profileFrameUrl;
-    if (bio !== undefined) update.bio = bio;
-    if (username) update.username = username;
-    if (profileText !== undefined) update.profileText = profileText;
-    if (profileBg !== undefined) update.profileBg = profileBg;
-    if (profileBgType) update.profileBgType = profileBgType;
+    if (bio         !== undefined)  update.bio          = bio;
+    if (bioType     !== undefined)  update.bioType      = bioType;
+    if (bioAudioUrl !== undefined)  update.bioAudioUrl  = bioAudioUrl;
+    if (username)                   update.username     = username;
+    if (profileText !== undefined)  update.profileText  = profileText;
+    if (profileBg   !== undefined)  update.profileBg    = profileBg;
+    if (profileBgType)              update.profileBgType = profileBgType;
     if (profileBanner !== undefined) update.profileBanner = profileBanner;
-    if (profileBannerType) update.profileBannerType = profileBannerType;
-    if (req.body.profileBlocks !== undefined) update.profileBlocks = req.body.profileBlocks;
-    if (req.body.profilePrefs !== undefined) update.profilePrefs = req.body.profilePrefs;
+    if (profileBannerType)          update.profileBannerType = profileBannerType;
+    if (req.body.profileBlocks    !== undefined) update.profileBlocks    = req.body.profileBlocks;
+    if (req.body.profilePrefs     !== undefined) update.profilePrefs     = req.body.profilePrefs;
+    if (req.body.wallPermission   !== undefined) update.wallPermission   = req.body.wallPermission;
 
     const user = await User.findByIdAndUpdate(
       req.user._id,

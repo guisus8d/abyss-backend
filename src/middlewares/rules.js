@@ -5,6 +5,7 @@ const BLOCKED_EMAIL_DOMAINS = new Set([
   'throwam.com', 'sharklasers.com', 'yopmail.com', 'tempmail.com',
   'dispostable.com', 'maildrop.cc', 'getairmail.com', 'fakeinbox.com',
   'spamgourmet.com', 'trashmail.me', 'spamgourmet.net', 'tempr.email',
+  'test.com', 'test.xyz', 'teste.com', 'veospot.com',
 ]);
 
 const registerRules = [

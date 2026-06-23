@@ -16,4 +16,5 @@ router.use('/store',        require('./store.routes'));
 router.use('/gifts',        require('./gift.routes'));
 router.use('/transactions', require('./wallet.routes'));
 router.use('/coins',        require('./wallet.routes'));
+router.use('/wall',         require('./wall.routes'));
 module.exports = router;

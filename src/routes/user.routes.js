@@ -6,6 +6,7 @@ const {
   uploadBanner,
   uploadCardBg,
   uploadBlock,
+  uploadAudio,
 } = require('../config/cloudinary');
 const { optionalAuth } = require('../middlewares/optionalAuth');
 const { getProfile, getUserByUsername, updateProfile, uploadAvatar } = require('../controllers/user.controller');
@@ -242,6 +243,31 @@ router.post('/mod/grantcreator/:userId', authMiddleware, async (req, res) => {
 
     res.json({ ok: true, coinsGranted, user: { _id: target._id, username: target.username, isCreator: true } });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Block audio — subir audio para un bloque de Sobre mí ─────────────────────
+router.post('/me/block-audio', authMiddleware, uploadAudio.single('audio'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Archivo de audio requerido' });
+    res.json({ url: req.file.path });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Bio audio — subir archivo de audio para bio de perfil ─────────────────────
+router.post('/me/bio-audio', authMiddleware, uploadAudio.single('audio'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Archivo de audio requerido' });
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { bioAudioUrl: req.file.path, bioType: 'audio', bio: null },
+      { new: true }
+    ).populate('badges');
+    res.json({ bioAudioUrl: req.file.path, user });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── Eliminar cuenta propia ─────────────────────────────────────────────────────
