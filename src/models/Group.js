@@ -68,6 +68,10 @@ const groupSchema = new mongoose.Schema({
   unreadCounts:    { type: Map, of: Number, default: {} },
   bannedUsers:     [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   backgroundUrl:   { type: String, default: null },
+  isCircle:        { type: Boolean, default: false },
+  isPublic:        { type: Boolean, default: false },
+  hashtags:        [{ type: String }],
+  membersCount:    { type: Number,  default: 0 },
 }, { timestamps: true });
 
 groupSchema.index({ 'members.user': 1 });

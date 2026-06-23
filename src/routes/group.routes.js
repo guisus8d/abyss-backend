@@ -21,6 +21,91 @@ async function emitSystemMessage(group, text, action) {
   });
 }
 
+// ─── Círculos ──────────────────────────────────────────────────────────────────
+
+// Crear círculo
+router.post('/circles', authMiddleware, uploadAvatar.single('image'), async (req, res) => {
+  try {
+    const { name, description, hashtags } = req.body;
+    if (!name?.trim()) return res.status(400).json({ error: 'Nombre requerido' });
+
+    const parsedTags = (() => {
+      try { return JSON.parse(hashtags || '[]'); } catch { return []; }
+    })();
+
+    const circle = await Group.create({
+      name:         name.trim(),
+      description:  description?.trim() || '',
+      imageUrl:     req.file?.path || null,
+      imagePublicId:req.file?.filename || null,
+      creator:      req.user._id,
+      isCircle:     true,
+      isPublic:     true,
+      hashtags:     parsedTags.map(t => String(t).toLowerCase().replace(/[^a-z0-9_]/g, '')).filter(Boolean),
+      membersCount: 1,
+      members:      [{ user: req.user._id, role: 'admin' }],
+    });
+
+    const populated = await Group.findById(circle._id)
+      .select('name description imageUrl hashtags membersCount members lastMessage lastMessageText creator isCircle isPublic');
+    res.status(201).json({ group: populated });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Mis círculos
+router.get('/circles/mine', authMiddleware, async (req, res) => {
+  try {
+    const circles = await Group.find({ isCircle: true, 'members.user': req.user._id })
+      .select('name description imageUrl hashtags membersCount members lastMessage lastMessageText lastMessageSender unreadCounts creator isCircle isPublic')
+      .sort({ lastMessage: -1 });
+    res.json({ circles });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Unirse a un círculo (sin aprobación)
+router.post('/circles/:id/join', authMiddleware, async (req, res) => {
+  try {
+    const circle = await Group.findOne({ _id: req.params.id, isCircle: true });
+    if (!circle) return res.status(404).json({ error: 'Círculo no encontrado' });
+
+    const alreadyIn = circle.members.some(m => m.user.toString() === req.user._id.toString());
+    if (alreadyIn) return res.status(400).json({ error: 'Ya eres miembro' });
+
+    circle.members.push({ user: req.user._id, role: 'member' });
+    circle.membersCount = circle.members.length;
+    await circle.save();
+
+    const populated = await Group.findById(circle._id)
+      .select('name description imageUrl hashtags membersCount members lastMessage lastMessageText creator isCircle isPublic');
+    res.json({ group: populated });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Salir de un círculo
+router.delete('/circles/:id/leave', authMiddleware, async (req, res) => {
+  try {
+    const circle = await Group.findOne({ _id: req.params.id, isCircle: true });
+    if (!circle) return res.status(404).json({ error: 'Círculo no encontrado' });
+
+    const isMember = circle.members.some(m => m.user.toString() === req.user._id.toString());
+    if (!isMember) return res.status(400).json({ error: 'No eres miembro' });
+
+    circle.members = circle.members.filter(m => m.user.toString() !== req.user._id.toString());
+    circle.membersCount = circle.members.length;
+
+    // Si no quedan admins, promueve al siguiente miembro
+    const hasAdmin = circle.members.some(m => m.role === 'admin');
+    if (!hasAdmin && circle.members.length > 0) {
+      circle.members[0].role = 'admin';
+    }
+
+    await circle.save();
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Grupos regulares ───────────────────────────────────────────────────────────
+
 // Obtener mis grupos
 router.get('/', authMiddleware, async (req, res) => {
   try {
