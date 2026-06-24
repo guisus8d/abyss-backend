@@ -95,15 +95,17 @@ router.patch('/circles/:id/toggle-active', authMiddleware, async (req, res) => {
 // Unirse a un círculo (sin aprobación)
 router.post('/circles/:id/join', authMiddleware, async (req, res) => {
   try {
-    const circle = await Group.findOne({ _id: req.params.id, isCircle: true });
-    if (!circle) return res.status(404).json({ error: 'Círculo no encontrado' });
+    const circle = await Group.findOneAndUpdate(
+      { _id: req.params.id, isCircle: true, 'members.user': { $ne: req.user._id } },
+      { $push: { members: { user: req.user._id, role: 'member' } }, $inc: { membersCount: 1 } },
+      { new: true }
+    );
 
-    const alreadyIn = circle.members.some(m => m.user.toString() === req.user._id.toString());
-    if (alreadyIn) return res.status(400).json({ error: 'Ya eres miembro' });
-
-    circle.members.push({ user: req.user._id, role: 'member' });
-    circle.membersCount = circle.members.length;
-    await circle.save();
+    if (!circle) {
+      const exists = await Group.exists({ _id: req.params.id, isCircle: true });
+      if (!exists) return res.status(404).json({ error: 'Círculo no encontrado' });
+      return res.status(400).json({ error: 'Ya eres miembro' });
+    }
 
     const joiningUser = await User.findById(req.user._id).select('username').lean();
     if (joiningUser) {
@@ -203,7 +205,7 @@ router.get('/:id/messages', authMiddleware, async (req, res) => {
     const isMember = group.members.some(
       m => (m.user?._id || m.user).toString() === req.user._id.toString()
     );
-    if (!isMember) return res.status(403).json({ error: 'No eres miembro' });
+    if (!isMember && !(group.isCircle && group.isPublic)) return res.status(403).json({ error: 'No eres miembro' });
 
     const total    = group.messages.length;
     const messages = group.messages.slice().reverse().slice(skip, skip + limit).reverse();
@@ -223,7 +225,8 @@ router.get('/:id', authMiddleware, async (req, res) => {
     const isMember  = group.members.some(m => m.user._id.toString() === req.user._id.toString());
     const isPending = group.pendingInvites.some(u => u.toString() === req.user._id.toString());
 
-    if (!isMember && !isPending) return res.status(403).json({ error: 'No eres miembro' });
+    const isPublicCircle = group.isCircle && group.isPublic;
+    if (!isMember && !isPending && !isPublicCircle) return res.status(403).json({ error: 'No eres miembro' });
 
     // Pendientes ven el grupo sin historial de mensajes
     if (isPending) {
