@@ -57,8 +57,9 @@ router.get('/circles/mine', authMiddleware, async (req, res) => {
   try {
     const circles = await Group.find({ isCircle: true, 'members.user': req.user._id })
       .select('name description imageUrl hashtags membersCount members lastMessage lastMessageText lastMessageSender unreadCounts creator isCircle isPublic isActive')
-      .populate('members.user', 'username avatarUrl')
+      .populate('members.user', 'username avatarUrl profileFrame profileFrameUrl')
       .sort({ lastMessage: -1 });
+    console.log('[CIRCLES-DEBUG]', JSON.stringify(circles[0]?.members[0]?.user));
     res.json({ circles });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
