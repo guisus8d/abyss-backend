@@ -13,6 +13,7 @@ async function getProfile(req, res) {
 
 async function getUserByUsername(req, res) {
   try {
+    console.log('[USER-DEBUG] buscando username:', req.params.username, 'decoded:', decodeURIComponent(req.params.username));
     const user = await User.findOne({ username: decodeURIComponent(req.params.username) })
       .populate('badges')
       .select('-passwordHash -blocked');
