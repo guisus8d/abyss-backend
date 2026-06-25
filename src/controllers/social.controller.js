@@ -5,7 +5,7 @@ const { sendPush } = require('../utils/pushNotifications');
 // Seguir usuario
 async function followUser(req, res) {
   try {
-    const { username } = req.params;
+    const username = decodeURIComponent(req.params.username);
     const me = req.user._id;
 
     const target = await User.findOne({ username });
@@ -41,7 +41,7 @@ async function followUser(req, res) {
 // Bloquear / desbloquear usuario
 async function blockUser(req, res) {
   try {
-    const { username } = req.params;
+    const username = decodeURIComponent(req.params.username);
     const me = req.user._id;
 
     const target = await User.findOne({ username });
@@ -74,7 +74,7 @@ async function blockUser(req, res) {
 // Ver seguidores de un usuario
 async function getFollowers(req, res) {
   try {
-    const user = await User.findOne({ username: req.params.username })
+    const user = await User.findOne({ username: decodeURIComponent(req.params.username) })
       .populate('followers', 'username xp avatarUrl badges profileFrame profileFrameUrl followers');
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.json({ followers: user.followers, count: user.followers.length });
@@ -86,7 +86,7 @@ async function getFollowers(req, res) {
 // Ver a quién sigue un usuario
 async function getFollowing(req, res) {
   try {
-    const user = await User.findOne({ username: req.params.username })
+    const user = await User.findOne({ username: decodeURIComponent(req.params.username) })
       .populate('following', 'username xp avatarUrl badges profileFrame profileFrameUrl followers');
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.json({ following: user.following, count: user.following.length });

@@ -101,7 +101,7 @@ router.patch('/me/logo', authMiddleware, (req, res, next) => {
 // ── GET /api/store/:username — ver tienda de un usuario ────────────────────
 router.get('/:username', authMiddleware, async (req, res) => {
   try {
-    const user = await User.findOne({ username: req.params.username }).select('_id username avatarUrl profileFrame profileFrameUrl xp');
+    const user = await User.findOne({ username: decodeURIComponent(req.params.username) }).select('_id username avatarUrl profileFrame profileFrameUrl xp');
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
 
     const store = await Store.findOne({ usuario: user._id, activa: true });

@@ -7,7 +7,7 @@ const { optionalAuth }   = require('../middlewares/optionalAuth');
 // ── GET /api/wall/:username  — mensajes del muro (paginados) ──────────────────
 router.get('/:username', optionalAuth, async (req, res) => {
   try {
-    const owner = await User.findOne({ username: req.params.username }).select('_id');
+    const owner = await User.findOne({ username: decodeURIComponent(req.params.username) }).select('_id');
     if (!owner) return res.status(404).json({ error: 'Usuario no encontrado' });
 
     const page  = Math.max(1, parseInt(req.query.page)  || 1);
@@ -36,7 +36,7 @@ router.post('/:username', authMiddleware, async (req, res) => {
     if (!text?.trim())             return res.status(400).json({ error: 'El mensaje no puede estar vacío' });
     if (text.trim().length > 500)  return res.status(400).json({ error: 'Máximo 500 caracteres' });
 
-    const target = await User.findOne({ username: req.params.username })
+    const target = await User.findOne({ username: decodeURIComponent(req.params.username) })
       .select('_id wallPermission followers following');
     if (!target) return res.status(404).json({ error: 'Usuario no encontrado' });
 

@@ -13,7 +13,7 @@ async function getProfile(req, res) {
 
 async function getUserByUsername(req, res) {
   try {
-    const user = await User.findOne({ username: req.params.username })
+    const user = await User.findOne({ username: decodeURIComponent(req.params.username) })
       .populate('badges')
       .select('-passwordHash -blocked');
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });

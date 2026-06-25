@@ -51,7 +51,7 @@ router.get('/user/:username', authMiddleware, async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const user = await User.findOne({ username: req.params.username }).lean();
+    const user = await User.findOne({ username: decodeURIComponent(req.params.username) }).lean();
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
     const [posts, total] = await Promise.all([
       Post.find({ author: user._id })
