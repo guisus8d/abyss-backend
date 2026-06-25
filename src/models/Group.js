@@ -48,7 +48,7 @@ const messageSchema = new mongoose.Schema({
 
 const memberSchema = new mongoose.Schema({
   user:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  role:     { type: String, enum: ['admin', 'member'], default: 'member' },
+  role:     { type: String, enum: ['admin', 'co-admin', 'member'], default: 'member' },
   joinedAt: { type: Date, default: Date.now },
 }, { _id: false });
 
@@ -71,7 +71,9 @@ const groupSchema = new mongoose.Schema({
   isCircle:        { type: Boolean, default: false },
   isPublic:        { type: Boolean, default: false },
   isActive:        { type: Boolean, default: true },
+  activatedAt:     { type: Date,    default: null },
   hashtags:        [{ type: String }],
+  rules:           [{ type: String, maxlength: 200 }],
   membersCount:    { type: Number,  default: 0 },
 }, { timestamps: true });
 

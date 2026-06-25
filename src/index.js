@@ -94,3 +94,7 @@ startBots();
 // Cron de expiración de regalos
 const { startGiftCron } = require('./utils/giftCron');
 startGiftCron();
+
+// Cron de apagado automático de fiestas (1 hora)
+const { startCircleCron } = require('./utils/circleCron');
+startCircleCron();
