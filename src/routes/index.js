@@ -1,4 +1,8 @@
-const router = require('express').Router();
+const router          = require('express').Router();
+const checkAppVersion = require('../middlewares/checkAppVersion');
+
+router.use(checkAppVersion);
+
 router.use('/auth',         require('./auth.routes'));
 router.use('/users',        require('./user.routes'));
 router.use('/posts',        require('./post.routes'));
