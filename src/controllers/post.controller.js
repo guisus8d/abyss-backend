@@ -217,6 +217,9 @@ async function reactPost(req, res) {
         }
       }
     } else {
+      const distinctTypes = new Set(
+        post.reactions.filter(r => r.type !== 'like').map(r => r.type)
+      );
       const prevIdx = post.reactions.findIndex(
         r => r.user.toString() === userId && r.type !== 'like'
       );
@@ -224,9 +227,15 @@ async function reactPost(req, res) {
         if (post.reactions[prevIdx].type === type) {
           post.reactions.splice(prevIdx, 1);
         } else {
+          if (!distinctTypes.has(type) && distinctTypes.size >= 20) {
+            return res.status(400).json({ error: 'max_emojis', message: 'Maximo 20 tipos de emoji por post' });
+          }
           post.reactions[prevIdx].type = type;
         }
       } else {
+        if (!distinctTypes.has(type) && distinctTypes.size >= 20) {
+          return res.status(400).json({ error: 'max_emojis', message: 'Maximo 20 tipos de emoji por post' });
+        }
         post.reactions.push({ user: req.user._id, type });
         if (post.author.toString() !== userId) {
           await Notification.create({
