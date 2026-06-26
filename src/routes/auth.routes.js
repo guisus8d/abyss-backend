@@ -13,6 +13,7 @@ const { uploadAvatar } = require('../config/cloudinary');
 
 const { authMiddleware } = require('../middlewares/auth');
 const { register, login } = require('../controllers/auth.controller');
+const { pendingCodes, verifiedEmails } = require('../utils/registerVerification');
 const getResend = () => new Resend(process.env.RESEND_API_KEY);
 function getIO() { try { return require('../sockets').getIO(); } catch { return null; } }
 
@@ -22,6 +23,14 @@ const registerLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Demasiadas cuentas creadas desde esta IP. Intenta de nuevo en 1 hora.' },
+});
+
+const registerCodeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas solicitudes de codigo. Intenta de nuevo en 1 hora.' },
 });
 
 async function checkRateLimit(userId, purpose, maxPerHour) {
@@ -424,6 +433,113 @@ router.post('/confirm-email-change', async (req, res) => {
   } catch (err) {
     console.error('confirm-email-change error:', err.message);
     res.status(500).json({ error: 'No se pudo confirmar el cambio' });
+  }
+});
+
+// ── Send registration verification code (pre-creation, no user yet) ───────────
+router.post('/send-register-code', registerCodeLimiter, async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email?.trim()) return res.status(400).json({ error: 'Email requerido' });
+
+    const normalized  = email.toLowerCase().trim();
+    const emailRegex  = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalized))
+      return res.status(400).json({ error: 'Formato de email invalido' });
+
+    const existing = await User.findOne({ email: normalized });
+    if (existing) return res.status(400).json({ error: 'Este email ya esta registrado' });
+
+    // 1-minute resend cooldown: code has > 14 of 15 minutes remaining
+    const prev = pendingCodes.get(normalized);
+    if (prev && prev.expiresAt > Date.now() + 14 * 60 * 1000)
+      return res.status(429).json({ error: 'Espera al menos 1 minuto antes de solicitar otro codigo' });
+
+    const code      = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = Date.now() + 15 * 60 * 1000;
+    pendingCodes.set(normalized, { code, expiresAt, attempts: 0 });
+
+    await getResend().emails.send({
+      from:    'Abyss <no-reply@abyss.social>',
+      to:      normalized,
+      subject: 'Tu codigo de verificacion — Abyss',
+      html: `<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Verificar cuenta</title></head>
+<body style="margin:0;padding:0;background:#020509;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#020509;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:480px;background:#0b1521;border-radius:16px;border:1px solid rgba(255,255,255,0.07);overflow:hidden;">
+        <tr><td style="background:linear-gradient(135deg,#003d38,#005a52);padding:32px 32px 24px;text-align:center;">
+          <p style="margin:0 0 8px;color:rgba(0,229,204,0.6);font-size:11px;letter-spacing:4px;font-weight:700;">ABYSS</p>
+          <h1 style="margin:0;color:#e8f4f8;font-size:22px;font-weight:700;">Verificacion de cuenta</h1>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <p style="margin:0 0 24px;color:rgba(232,244,248,0.5);font-size:14px;line-height:1.6;">
+            Usa el siguiente codigo para verificar tu correo. Expira en <strong style="color:#e8f4f8;">15 minutos</strong>.
+          </p>
+          <div style="text-align:center;margin-bottom:28px;">
+            <div style="display:inline-block;background:linear-gradient(135deg,#003d38,#004a40);border:1px solid rgba(0,229,204,0.3);border-radius:16px;padding:20px 40px;">
+              <p style="margin:0;color:#00e5cc;font-size:36px;font-weight:900;letter-spacing:10px;">${code}</p>
+            </div>
+          </div>
+          <p style="margin:0;color:rgba(232,244,248,0.35);font-size:12px;line-height:1.6;">
+            Si no solicitaste esto, ignora este mensaje.
+          </p>
+        </td></tr>
+        <tr><td style="padding:16px 32px 24px;border-top:1px solid rgba(255,255,255,0.05);text-align:center;">
+          <p style="margin:0;color:rgba(232,244,248,0.2);font-size:11px;">© 2025 Abyss · abyss.social</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`,
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('send-register-code error:', err.message);
+    res.status(500).json({ error: 'No se pudo enviar el codigo' });
+  }
+});
+
+// ── Verify registration code ───────────────────────────────────────────────────
+router.post('/verify-register-code', async (req, res) => {
+  try {
+    const { email, code } = req.body;
+    if (!email?.trim() || !code?.trim())
+      return res.status(400).json({ error: 'Email y codigo requeridos' });
+
+    const normalized = email.toLowerCase().trim();
+    const entry      = pendingCodes.get(normalized);
+
+    if (!entry || entry.expiresAt < Date.now()) {
+      pendingCodes.delete(normalized);
+      return res.status(400).json({ error: 'El codigo ha expirado. Solicita uno nuevo' });
+    }
+
+    entry.attempts += 1;
+    if (entry.attempts > 5) {
+      pendingCodes.delete(normalized);
+      return res.status(400).json({ error: 'Demasiados intentos incorrectos. Solicita un nuevo codigo' });
+    }
+
+    if (entry.code !== code.trim()) {
+      const left = 5 - entry.attempts;
+      return res.status(400).json({
+        error: `Codigo incorrecto. ${left} intento${left !== 1 ? 's' : ''} restante${left !== 1 ? 's' : ''}`,
+      });
+    }
+
+    pendingCodes.delete(normalized);
+    verifiedEmails.set(normalized, Date.now() + 30 * 60 * 1000); // 30 min para completar el registro
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('verify-register-code error:', err.message);
+    res.status(500).json({ error: 'Error al verificar el codigo' });
   }
 });
 
