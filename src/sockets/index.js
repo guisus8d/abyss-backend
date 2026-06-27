@@ -309,6 +309,29 @@ function initSockets(server) {
       }
     });
 
+    // ── Sala de Cine (Fiestas) ───────────────────────────────────────────────
+    socket.on('circle:cinema:start', async ({ groupId, videoId, startedBy }) => {
+      try {
+        if (!groupId || !videoId) return;
+        const group = await Group.findById(groupId).select('members isCircle').lean();
+        if (!group?.isCircle) return;
+        const member = group.members.find(m => m.user.toString() === socket.userId.toString());
+        if (!member || (member.role !== 'admin' && member.role !== 'co-admin')) return;
+        io.to(`group:${groupId}`).emit('circle:cinema:start', { groupId, videoId, startedBy });
+      } catch (e) { console.error('circle:cinema:start error:', e.message); }
+    });
+
+    socket.on('circle:cinema:stop', async ({ groupId }) => {
+      try {
+        if (!groupId) return;
+        const group = await Group.findById(groupId).select('members isCircle').lean();
+        if (!group?.isCircle) return;
+        const member = group.members.find(m => m.user.toString() === socket.userId.toString());
+        if (!member || (member.role !== 'admin' && member.role !== 'co-admin')) return;
+        io.to(`group:${groupId}`).emit('circle:cinema:stop', { groupId });
+      } catch (e) { console.error('circle:cinema:stop error:', e.message); }
+    });
+
     socket.on('disconnect', () => {
       clearInterval(keepAlive);
       console.log(`🔌 Desconectado: ${socket.userId}`);
