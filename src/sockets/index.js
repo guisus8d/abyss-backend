@@ -324,6 +324,17 @@ function initSockets(server) {
       } catch (e) { console.error('circle:cinema:start error:', e.message); }
     });
 
+    socket.on('circle:cinema:sync', async ({ groupId, action, currentTime }) => {
+      try {
+        if (!groupId || !action) return;
+        const group = await Group.findById(groupId).select('members isCircle').lean();
+        if (!group?.isCircle) return;
+        const member = group.members.find(m => m.user.toString() === socket.userId.toString());
+        if (!member || (member.role !== 'admin' && member.role !== 'co-admin')) return;
+        io.to(`group:${groupId}`).emit('circle:cinema:sync', { groupId, action, currentTime: currentTime ?? 0 });
+      } catch (e) { console.error('circle:cinema:sync error:', e.message); }
+    });
+
     socket.on('circle:cinema:stop', async ({ groupId }) => {
       try {
         if (!groupId) return;
