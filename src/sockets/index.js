@@ -312,11 +312,14 @@ function initSockets(server) {
     // ── Sala de Cine (Fiestas) ───────────────────────────────────────────────
     socket.on('circle:cinema:start', async ({ groupId, videoId, startedBy }) => {
       try {
-        if (!groupId || !videoId) return;
+        console.log('[CINEMA-SERVER] received', { groupId, videoId, userId: socket.userId });
+        if (!groupId || !videoId) { console.log('[CINEMA-SERVER] missing groupId or videoId'); return; }
         const group = await Group.findById(groupId).select('members isCircle').lean();
-        if (!group?.isCircle) return;
+        if (!group?.isCircle) { console.log('[CINEMA-SERVER] group not found or not a circle'); return; }
         const member = group.members.find(m => m.user.toString() === socket.userId.toString());
-        if (!member || (member.role !== 'admin' && member.role !== 'co-admin')) return;
+        console.log('[CINEMA-SERVER] member found:', member ? { role: member.role } : null);
+        if (!member || (member.role !== 'admin' && member.role !== 'co-admin')) { console.log('[CINEMA-SERVER] guard blocked: not admin/co-admin'); return; }
+        console.log('[CINEMA-SERVER] broadcasting to group:', groupId);
         io.to(`group:${groupId}`).emit('circle:cinema:start', { groupId, videoId, startedBy });
       } catch (e) { console.error('circle:cinema:start error:', e.message); }
     });
