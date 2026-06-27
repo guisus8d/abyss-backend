@@ -1,4 +1,5 @@
 const { Server } = require('socket.io');
+const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const Chat = require('../models/Chat');
 const Group = require('../models/Group');
@@ -328,6 +329,16 @@ function initSockets(server) {
         console.log('[CINEMA-SERVER] broadcasting to group:', groupId);
         io.to(`group:${groupId}`).emit('circle:cinema:start', { groupId, videoId, startedBy });
         cinemaActiveSessions.set(groupId.toString(), { videoId, startedAt: Date.now() });
+        io.to(`group:${groupId}`).emit('group:message', {
+          groupId,
+          message: {
+            _id: new mongoose.Types.ObjectId().toString(),
+            type: 'system',
+            text: `${startedBy} inicio la Sala de Cine`,
+            createdAt: new Date().toISOString(),
+            sender: null,
+          },
+        });
       } catch (e) { console.error('circle:cinema:start error:', e.message); }
     });
 
@@ -351,6 +362,16 @@ function initSockets(server) {
         if (!member || (member.role !== 'admin' && member.role !== 'co-admin')) return;
         io.to(`group:${groupId}`).emit('circle:cinema:stop', { groupId });
         cinemaActiveSessions.delete(groupId.toString());
+        io.to(`group:${groupId}`).emit('group:message', {
+          groupId,
+          message: {
+            _id: new mongoose.Types.ObjectId().toString(),
+            type: 'system',
+            text: 'Se cerro la Sala de Cine',
+            createdAt: new Date().toISOString(),
+            sender: null,
+          },
+        });
       } catch (e) { console.error('circle:cinema:stop error:', e.message); }
     });
 
