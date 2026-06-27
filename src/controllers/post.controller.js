@@ -221,17 +221,10 @@ async function reactPost(req, res) {
         post.reactions.filter(r => r.type !== 'like').map(r => r.type)
       );
       const prevIdx = post.reactions.findIndex(
-        r => r.user.toString() === userId && r.type !== 'like'
+        r => r.user.toString() === userId && r.type === type
       );
       if (prevIdx >= 0) {
-        if (post.reactions[prevIdx].type === type) {
-          post.reactions.splice(prevIdx, 1);
-        } else {
-          if (!distinctTypes.has(type) && distinctTypes.size >= 20) {
-            return res.status(400).json({ error: 'max_emojis', message: 'Maximo 20 tipos de emoji por post' });
-          }
-          post.reactions[prevIdx].type = type;
-        }
+        post.reactions.splice(prevIdx, 1);
       } else {
         if (!distinctTypes.has(type) && distinctTypes.size >= 20) {
           return res.status(400).json({ error: 'max_emojis', message: 'Maximo 20 tipos de emoji por post' });
