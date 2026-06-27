@@ -7,7 +7,27 @@ const Notification = require('../models/Notification');
 const User = require('../models/User');
 const { sendPush } = require('../utils/pushNotifications');
 
-const cinemaActiveSessions = new Map(); // groupId → { videoId, startedAt }
+const cinemaActiveSessions = new Map(); // groupId → { videoId, startedAt, proyectorId, proyectorUsername }
+
+async function handleProyectorLeave(userId, io, specificGroupId = null) {
+  for (const [groupId, session] of cinemaActiveSessions.entries()) {
+    if (specificGroupId && groupId !== specificGroupId.toString()) continue;
+    if (session.proyectorId !== userId.toString()) continue;
+    cinemaActiveSessions.delete(groupId);
+    io.to(`group:${groupId}`).emit('circle:cinema:stop', { groupId });
+    try {
+      const group = await Group.findById(groupId).select('members isCircle messages lastMessage lastMessageText');
+      if (!group) continue;
+      const msgText = 'Se cerro la Sala de Cine';
+      group.messages.push({ text: msgText, type: 'system', sender: null });
+      group.lastMessage     = new Date();
+      group.lastMessageText = msgText;
+      await group.save();
+      const sysMsg = group.messages[group.messages.length - 1];
+      io.to(`group:${groupId}`).emit('group:message', { groupId, message: sysMsg.toObject() });
+    } catch (e) { console.error('handleProyectorLeave error:', e.message); }
+  }
+}
 
 function initSockets(server) {
   const io = new Server(server, {
@@ -325,7 +345,12 @@ function initSockets(server) {
         const member = group.members.find(m => m.user.toString() === socket.userId.toString());
         if (!member || (member.role !== 'admin' && member.role !== 'co-admin')) return;
         io.to(`group:${groupId}`).emit('circle:cinema:start', { groupId, videoId, startedBy });
-        cinemaActiveSessions.set(groupId.toString(), { videoId, startedAt: Date.now() });
+        cinemaActiveSessions.set(groupId.toString(), {
+          videoId,
+          startedAt:          Date.now(),
+          proyectorId:        socket.userId.toString(),
+          proyectorUsername:  startedBy,
+        });
         const msgText = `${startedBy} inicio la Sala de Cine`;
         group.messages.push({ text: msgText, type: 'system', sender: null });
         group.lastMessage     = new Date();
@@ -336,15 +361,11 @@ function initSockets(server) {
       } catch (e) { console.error('circle:cinema:start error:', e.message); }
     });
 
-    socket.on('circle:cinema:sync', async ({ groupId, action, currentTime }) => {
-      try {
-        if (!groupId || !action) return;
-        const group = await Group.findById(groupId).select('members isCircle').lean();
-        if (!group?.isCircle) return;
-        const member = group.members.find(m => m.user.toString() === socket.userId.toString());
-        if (!member || (member.role !== 'admin' && member.role !== 'co-admin')) return;
-        socket.to(`group:${groupId}`).emit('circle:cinema:sync', { groupId, action, currentTime: currentTime ?? 0 });
-      } catch (e) { console.error('circle:cinema:sync error:', e.message); }
+    socket.on('circle:cinema:sync', ({ groupId, action, currentTime }) => {
+      if (!groupId || !action) return;
+      const session = cinemaActiveSessions.get(groupId.toString());
+      if (!session || session.proyectorId !== socket.userId.toString()) return;
+      socket.to(`group:${groupId}`).emit('circle:cinema:sync', { groupId, action, currentTime: currentTime ?? 0 });
     });
 
     socket.on('circle:cinema:stop', async ({ groupId }) => {
@@ -366,9 +387,13 @@ function initSockets(server) {
       } catch (e) { console.error('circle:cinema:stop error:', e.message); }
     });
 
+    socket.on('circle:cinema:proyector:leave', ({ groupId }) => {
+      handleProyectorLeave(socket.userId, io, groupId);
+    });
+
     socket.on('disconnect', () => {
       clearInterval(keepAlive);
-      console.log(`🔌 Desconectado: ${socket.userId}`);
+      handleProyectorLeave(socket.userId, io);
       User.findByIdAndUpdate(socket.userId, { lastActive: new Date() }).catch(() => {});
     });
   });
