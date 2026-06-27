@@ -6,6 +6,8 @@ const Notification = require('../models/Notification');
 const User = require('../models/User');
 const { sendPush } = require('../utils/pushNotifications');
 
+const cinemaActiveSessions = new Map(); // groupId → { videoId, startedAt }
+
 function initSockets(server) {
   const io = new Server(server, {
     cors: { origin: '*', methods: ['GET', 'POST'] },
@@ -189,7 +191,11 @@ function initSockets(server) {
     });
 
     // ── Grupos ───────────────────────────────────────────────────────────────
-    socket.on('group:join',  ({ groupId }) => socket.join(`group:${groupId}`));
+    socket.on('group:join', ({ groupId }) => {
+      socket.join(`group:${groupId}`);
+      const session = cinemaActiveSessions.get(groupId.toString());
+      if (session) socket.emit('circle:cinema:start', { groupId, videoId: session.videoId });
+    });
     socket.on('group:leave', ({ groupId }) => socket.leave(`group:${groupId}`));
 
     socket.on('group:message', async ({ groupId, text, type, mediaUrl, audioDuration, replyTo, giftId, giftData }) => {
@@ -321,6 +327,7 @@ function initSockets(server) {
         if (!member || (member.role !== 'admin' && member.role !== 'co-admin')) { console.log('[CINEMA-SERVER] guard blocked: not admin/co-admin'); return; }
         console.log('[CINEMA-SERVER] broadcasting to group:', groupId);
         io.to(`group:${groupId}`).emit('circle:cinema:start', { groupId, videoId, startedBy });
+        cinemaActiveSessions.set(groupId.toString(), { videoId, startedAt: Date.now() });
       } catch (e) { console.error('circle:cinema:start error:', e.message); }
     });
 
@@ -343,6 +350,7 @@ function initSockets(server) {
         const member = group.members.find(m => m.user.toString() === socket.userId.toString());
         if (!member || (member.role !== 'admin' && member.role !== 'co-admin')) return;
         io.to(`group:${groupId}`).emit('circle:cinema:stop', { groupId });
+        cinemaActiveSessions.delete(groupId.toString());
       } catch (e) { console.error('circle:cinema:stop error:', e.message); }
     });
 
