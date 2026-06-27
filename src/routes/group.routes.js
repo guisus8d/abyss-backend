@@ -96,11 +96,13 @@ router.patch('/circles/:id/toggle-active', authMiddleware, async (req, res) => {
       circle.activatedAt = new Date();
     } else {
       circle.activatedAt = null;
-      getIO()?.to(`group:${circle._id}`).emit('circle:deactivated', {
-        groupId: circle._id.toString(),
-      });
     }
     await circle.save();
+    if (circle.isActive) {
+      getIO()?.to(`group:${circle._id}`).emit('circle:activated', { groupId: circle._id.toString() });
+    } else {
+      getIO()?.to(`group:${circle._id}`).emit('circle:deactivated', { groupId: circle._id.toString() });
+    }
     res.json({ group: circle });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

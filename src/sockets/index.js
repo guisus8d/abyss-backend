@@ -319,26 +319,20 @@ function initSockets(server) {
     // ── Sala de Cine (Fiestas) ───────────────────────────────────────────────
     socket.on('circle:cinema:start', async ({ groupId, videoId, startedBy }) => {
       try {
-        console.log('[CINEMA-SERVER] received', { groupId, videoId, userId: socket.userId });
-        if (!groupId || !videoId) { console.log('[CINEMA-SERVER] missing groupId or videoId'); return; }
-        const group = await Group.findById(groupId).select('members isCircle').lean();
-        if (!group?.isCircle) { console.log('[CINEMA-SERVER] group not found or not a circle'); return; }
+        if (!groupId || !videoId) return;
+        const group = await Group.findById(groupId).select('members isCircle messages lastMessage lastMessageText');
+        if (!group?.isCircle) return;
         const member = group.members.find(m => m.user.toString() === socket.userId.toString());
-        console.log('[CINEMA-SERVER] member found:', member ? { role: member.role } : null);
-        if (!member || (member.role !== 'admin' && member.role !== 'co-admin')) { console.log('[CINEMA-SERVER] guard blocked: not admin/co-admin'); return; }
-        console.log('[CINEMA-SERVER] broadcasting to group:', groupId);
+        if (!member || (member.role !== 'admin' && member.role !== 'co-admin')) return;
         io.to(`group:${groupId}`).emit('circle:cinema:start', { groupId, videoId, startedBy });
         cinemaActiveSessions.set(groupId.toString(), { videoId, startedAt: Date.now() });
-        io.to(`group:${groupId}`).emit('group:message', {
-          groupId,
-          message: {
-            _id: new mongoose.Types.ObjectId().toString(),
-            type: 'system',
-            text: `${startedBy} inicio la Sala de Cine`,
-            createdAt: new Date().toISOString(),
-            sender: null,
-          },
-        });
+        const msgText = `${startedBy} inicio la Sala de Cine`;
+        group.messages.push({ text: msgText, type: 'system', sender: null });
+        group.lastMessage     = new Date();
+        group.lastMessageText = msgText;
+        await group.save();
+        const sysMsg = group.messages[group.messages.length - 1];
+        io.to(`group:${groupId}`).emit('group:message', { groupId, message: sysMsg.toObject() });
       } catch (e) { console.error('circle:cinema:start error:', e.message); }
     });
 
@@ -349,29 +343,26 @@ function initSockets(server) {
         if (!group?.isCircle) return;
         const member = group.members.find(m => m.user.toString() === socket.userId.toString());
         if (!member || (member.role !== 'admin' && member.role !== 'co-admin')) return;
-        io.to(`group:${groupId}`).emit('circle:cinema:sync', { groupId, action, currentTime: currentTime ?? 0 });
+        socket.to(`group:${groupId}`).emit('circle:cinema:sync', { groupId, action, currentTime: currentTime ?? 0 });
       } catch (e) { console.error('circle:cinema:sync error:', e.message); }
     });
 
     socket.on('circle:cinema:stop', async ({ groupId }) => {
       try {
         if (!groupId) return;
-        const group = await Group.findById(groupId).select('members isCircle').lean();
+        const group = await Group.findById(groupId).select('members isCircle messages lastMessage lastMessageText');
         if (!group?.isCircle) return;
         const member = group.members.find(m => m.user.toString() === socket.userId.toString());
         if (!member || (member.role !== 'admin' && member.role !== 'co-admin')) return;
         io.to(`group:${groupId}`).emit('circle:cinema:stop', { groupId });
         cinemaActiveSessions.delete(groupId.toString());
-        io.to(`group:${groupId}`).emit('group:message', {
-          groupId,
-          message: {
-            _id: new mongoose.Types.ObjectId().toString(),
-            type: 'system',
-            text: 'Se cerro la Sala de Cine',
-            createdAt: new Date().toISOString(),
-            sender: null,
-          },
-        });
+        const msgText = 'Se cerro la Sala de Cine';
+        group.messages.push({ text: msgText, type: 'system', sender: null });
+        group.lastMessage     = new Date();
+        group.lastMessageText = msgText;
+        await group.save();
+        const sysMsg = group.messages[group.messages.length - 1];
+        io.to(`group:${groupId}`).emit('group:message', { groupId, message: sysMsg.toObject() });
       } catch (e) { console.error('circle:cinema:stop error:', e.message); }
     });
 
