@@ -21,4 +21,5 @@ router.use('/gifts',        require('./gift.routes'));
 router.use('/transactions', require('./wallet.routes'));
 router.use('/coins',        require('./wallet.routes'));
 router.use('/wall',         require('./wall.routes'));
+router.use('/ads',          require('./ads.routes'));
 module.exports = router;

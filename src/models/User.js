@@ -41,6 +41,10 @@ const userSchema = new mongoose.Schema({
   isCreator:           { type: Boolean, default: false },
   creatorBonusGranted: { type: Boolean, default: false },
   wallPermission:      { type: String, enum: ['everyone', 'following', 'followers'], default: 'everyone' },
+  adViewsToday: {
+    count: { type: Number, default: 0 },
+    date:  { type: Date,   default: null },
+  },
 }, { timestamps: true });
 
 // ✅ FIX: separado en dos responsabilidades claras
