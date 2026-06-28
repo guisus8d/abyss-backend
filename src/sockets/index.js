@@ -5,6 +5,7 @@ const Chat = require('../models/Chat');
 const Group = require('../models/Group');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
+const MeetSession = require('../models/MeetSession');
 const { sendPush } = require('../utils/pushNotifications');
 
 const cinemaActiveSessions = new Map(); // groupId → { videoId, startedAt, proyectorId, proyectorUsername }
@@ -391,9 +392,30 @@ function initSockets(server) {
       handleProyectorLeave(socket.userId, io, groupId);
     });
 
+    // ── Meet de Texto ─────────────────────────────────────────────────────
+    socket.on('meet:join_room', ({ roomId }) => {
+      if (roomId) socket.join(`meet:${roomId}`);
+    });
+
+    socket.on('meet:message', ({ roomId, text }) => {
+      if (!roomId || !text?.trim()) return;
+      socket.to(`meet:${roomId}`).emit('meet:message', {
+        id:        Date.now().toString(),
+        text:      text.trim(),
+        createdAt: new Date().toISOString(),
+      });
+    });
+
     socket.on('disconnect', () => {
       clearInterval(keepAlive);
       User.findByIdAndUpdate(socket.userId, { lastActive: new Date() }).catch(() => {});
+      // Limpiar sesión meet si estaba activa
+      MeetSession.findOneAndDelete({ user: socket.userId }).then(session => {
+        if (session?.matchedWith) {
+          io.to(`user:${session.matchedWith}`).emit('meet:partner-left', {});
+          MeetSession.deleteOne({ user: session.matchedWith }).catch(() => {});
+        }
+      }).catch(() => {});
     });
   });
 }

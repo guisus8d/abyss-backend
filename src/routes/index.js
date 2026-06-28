@@ -22,4 +22,5 @@ router.use('/transactions', require('./wallet.routes'));
 router.use('/coins',        require('./wallet.routes'));
 router.use('/wall',         require('./wall.routes'));
 router.use('/ads',          require('./ads.routes'));
+router.use('/meet',         require('./meet.routes'));
 module.exports = router;
