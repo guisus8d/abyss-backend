@@ -31,8 +31,8 @@ router.post('/text/join', authMiddleware, async (req, res) => {
     const existing = await MeetSession.findOne({ user: userId });
     if (existing) await cleanupSession(existing, io);
 
-    // Obtener género del usuario
-    const me        = await User.findById(userId).select('gender').lean();
+    // Obtener género y avatar del usuario
+    const me         = await User.findById(userId).select('gender avatarUrl').lean();
     const userGender = mapGender(me?.gender);
 
     // Buscar sesión compatible en waiting
@@ -59,10 +59,17 @@ router.post('/text/join', authMiddleware, async (req, res) => {
         status: 'chatting', matchedWith: match.user, roomId, startedAt,
       });
 
-      // Notificar al usuario en espera
-      io.to(`user:${match.user}`).emit('meet:matched', { roomId, startedAt });
+      // Avatar del partner para cada lado
+      const matchUser = await User.findById(match.user).select('avatarUrl').lean();
 
-      return res.json({ matched: true, roomId, startedAt });
+      // Notificar al usuario en espera (su partner es el que acaba de hacer join = me)
+      io.to(`user:${match.user}`).emit('meet:matched', {
+        roomId, startedAt,
+        partnerAvatar: me?.avatarUrl || null,
+      });
+
+      // HTTP response al que hizo join (su partner es el que estaba esperando = matchUser)
+      return res.json({ matched: true, roomId, startedAt, partnerAvatar: matchUser?.avatarUrl || null });
     }
 
     // Sin match → poner en espera
