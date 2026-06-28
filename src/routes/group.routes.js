@@ -206,7 +206,7 @@ router.delete('/circles/:id/leave', authMiddleware, async (req, res) => {
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const groups = await Group.find({ 'members.user': req.user._id })
-      .select('name description imageUrl bgColor members lastMessage lastMessageText lastMessageSender unreadCounts creator')
+      .select('name description imageUrl bgColor members lastMessage lastMessageText lastMessageSender unreadCounts creator isCircle')
       .sort({ lastMessage: -1 });
     res.json({ groups });
   } catch (err) { res.status(500).json({ error: err.message }); }
