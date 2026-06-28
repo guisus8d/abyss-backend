@@ -393,7 +393,6 @@ function initSockets(server) {
 
     socket.on('disconnect', () => {
       clearInterval(keepAlive);
-      handleProyectorLeave(socket.userId, io);
       User.findByIdAndUpdate(socket.userId, { lastActive: new Date() }).catch(() => {});
     });
   });
