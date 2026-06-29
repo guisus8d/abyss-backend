@@ -18,12 +18,17 @@ const commentSchema = new mongoose.Schema({
 });
 
 const postSchema = new mongoose.Schema({
-  postType: { type: String, default: "quick", enum: ["quick","image","news"] },
+  postType: { type: String, default: "quick", enum: ["quick","image","news","video"] },
   title:    { type: String, default: "" },
   author:         { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   content:        { type: String, required: true, maxlength: 1000 },
   imageUrl:       { type: String, default: null },
   imagePublicId:  { type: String, default: null },
+  videoUrl:          { type: String, default: null },
+  videoDuration:     { type: Number, default: null },
+  videoStartTime:    { type: Number, default: null },
+  videoEndTime:      { type: Number, default: null },
+  videoThumbnailUrl: { type: String, default: null },
   tags:           [{ type: String }],
   group:          { type: mongoose.Schema.Types.ObjectId, ref: 'Group', default: null },
   reactions:      [reactionSchema],

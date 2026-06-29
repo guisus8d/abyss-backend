@@ -159,6 +159,17 @@ const groupBgStorage = new CloudinaryStorage({
 });
 const uploadGroupBg = multer({ storage: groupBgStorage, limits: { fileSize: 8 * 1024 * 1024 } });
 
+// ── Videos de posts ───────────────────────────────────────────────────────────
+const videoPostStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder:          'abbys/videos',
+    resource_type:   'video',
+    allowed_formats: ['mp4', 'mov', 'avi', 'mkv', 'webm'],
+  },
+});
+const uploadVideoPost = multer({ storage: videoPostStorage, limits: { fileSize: 50 * 1024 * 1024 } });
+
 // ── Audio ─────────────────────────────────────────────────────────────────────
 const audioStorage = new CloudinaryStorage({
   cloudinary,
@@ -175,6 +186,7 @@ module.exports = {
   uploadAvatar,
   uploadGroupBg,
   uploadPost,
+  uploadVideoPost,
   uploadBanner,
   uploadCardBg,
   uploadBlock,

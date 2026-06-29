@@ -2,7 +2,7 @@ const router = require('express').Router();
 const { authMiddleware }            = require('../middlewares/auth');
 const { postRules, commentRules }   = require('../middlewares/rules');
 const { validate }                  = require('../middlewares/validate');
-const { uploadPost }                = require('../config/cloudinary');
+const { uploadPost, uploadVideoPost, cloudinary } = require('../config/cloudinary');
 const Post                          = require('../models/Post');
 const User                          = require('../models/User');
 const { optionalAuth } = require('../middlewares/optionalAuth');
@@ -10,6 +10,30 @@ const {
   createPost, getPosts, getFollowingPosts, getTrendingPosts,
   getPost, reactPost, addComment, deletePost,
 } = require('../controllers/post.controller');
+
+// ── Upload de video (antes del POST / para evitar conflicto de middleware) ─────
+router.post('/upload-video', authMiddleware, uploadVideoPost.single('video'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No se recibió ningún archivo de video' });
+
+    const startTime = parseFloat(req.body.startTime) || 0;
+    const videoUrl  = req.file.path;
+    const publicId  = req.file.filename;
+
+    const thumbnailUrl = cloudinary.url(publicId, {
+      resource_type: 'video',
+      format:        'jpg',
+      start_offset:  String(startTime),
+      transformation: [{ width: 800, crop: 'limit' }],
+      secure: true,
+    });
+
+    res.json({ videoUrl, publicId, thumbnailUrl });
+  } catch (err) {
+    console.error('upload-video error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ── Feed principal ────────────────────────────────────────────────────────────
 router.get('/',           optionalAuth, getPosts);

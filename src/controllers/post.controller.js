@@ -37,8 +37,11 @@ function levenshteinSimilarity(a, b) {
 
 async function createPost(req, res) {
   try {
-    const { content, tags, postType, title, commentPermission } = req.body;
-    if (!content?.trim() && !title?.trim() && !req.file)
+    const {
+      content, tags, postType, title, commentPermission,
+      videoUrl, videoDuration, videoStartTime, videoEndTime, videoThumbnailUrl,
+    } = req.body;
+    if (!content?.trim() && !title?.trim() && !req.file && !videoUrl)
       return res.status(400).json({ error: 'Contenido requerido' });
 
     const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000);
@@ -59,6 +62,13 @@ async function createPost(req, res) {
     if (req.file) {
       postData.imageUrl      = req.file.path;
       postData.imagePublicId = req.file.filename;
+    }
+    if (videoUrl) {
+      postData.videoUrl          = videoUrl;
+      if (videoDuration  != null) postData.videoDuration     = Number(videoDuration);
+      if (videoStartTime != null) postData.videoStartTime    = Number(videoStartTime);
+      if (videoEndTime   != null) postData.videoEndTime      = Number(videoEndTime);
+      if (videoThumbnailUrl)      postData.videoThumbnailUrl = videoThumbnailUrl;
     }
 
     const post = await Post.create(postData);
