@@ -91,10 +91,23 @@ router.get('/circles/search', authMiddleware, async (req, res) => {
       isCircle: true,
       $or: [{ name: regex }, { hashtags: regex }],
     })
-      .select('name imageUrl membersCount hashtags isActive')
+      .select('name imageUrl membersCount hashtags isActive members')
+      .populate({ path: 'members.user', select: 'username avatarUrl profileFrame profileFrameUrl' })
       .limit(5)
       .lean();
-    res.json({ circles });
+    const mapped = circles.map(c => {
+      const adminMember = (c.members || []).find(m => m.role === 'admin');
+      return {
+        _id: c._id,
+        name: c.name,
+        imageUrl: c.imageUrl,
+        membersCount: c.membersCount,
+        hashtags: c.hashtags,
+        isActive: c.isActive,
+        admin: adminMember?.user || null,
+      };
+    });
+    res.json({ circles: mapped });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
