@@ -73,10 +73,13 @@ router.get('/circles/mine', authMiddleware, async (req, res) => {
 // Fiestas públicas y activas (sin auth requerida)
 router.get('/circles/public', async (req, res) => {
   try {
+    const { hashtag } = req.query;
+    const filter = { isCircle: true, isPublic: true };
+    if (hashtag) filter.hashtags = hashtag;
     const circles = await Group
-      .find({ isCircle: true, isPublic: true, isActive: true })
-      .sort({ membersCount: -1 })
-      .limit(10)
+      .find(filter)
+      .sort({ isActive: -1, membersCount: -1 })
+      .limit(30)
       .select('name imageUrl membersCount hashtags isCircle isPublic isActive');
     res.json({ circles });
   } catch (err) { res.status(500).json({ error: err.message }); }
