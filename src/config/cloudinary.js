@@ -159,6 +159,17 @@ const groupBgStorage = new CloudinaryStorage({
 });
 const uploadGroupBg = multer({ storage: groupBgStorage, limits: { fileSize: 8 * 1024 * 1024 } });
 
+// ── Fondos de posts de noticias ───────────────────────────────────────────────
+const postBgStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder:          'abbys/post-backgrounds',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation:  [{ width: 1600, crop: 'limit', quality: 'auto:best' }],
+  },
+});
+const uploadPostBg = multer({ storage: postBgStorage, limits: { fileSize: 8 * 1024 * 1024 } });
+
 // ── Videos de posts ───────────────────────────────────────────────────────────
 const videoPostStorage = new CloudinaryStorage({
   cloudinary,
@@ -187,6 +198,7 @@ module.exports = {
   uploadGroupBg,
   uploadPost,
   uploadVideoPost,
+  uploadPostBg,
   uploadBanner,
   uploadCardBg,
   uploadBlock,

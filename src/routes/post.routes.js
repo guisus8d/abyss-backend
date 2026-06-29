@@ -2,7 +2,7 @@ const router = require('express').Router();
 const { authMiddleware }            = require('../middlewares/auth');
 const { postRules, commentRules }   = require('../middlewares/rules');
 const { validate }                  = require('../middlewares/validate');
-const { uploadPost, uploadVideoPost, cloudinary } = require('../config/cloudinary');
+const { uploadPost, uploadVideoPost, uploadPostBg, cloudinary } = require('../config/cloudinary');
 const Post                          = require('../models/Post');
 const User                          = require('../models/User');
 const { optionalAuth } = require('../middlewares/optionalAuth');
@@ -10,6 +10,17 @@ const {
   createPost, getPosts, getFollowingPosts, getTrendingPosts,
   getPost, reactPost, addComment, deletePost,
 } = require('../controllers/post.controller');
+
+// ── Upload de fondo de noticia ────────────────────────────────────────────────
+router.post('/upload-background', authMiddleware, uploadPostBg.single('background'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No se recibio ningun archivo' });
+    res.json({ backgroundUrl: req.file.path });
+  } catch (err) {
+    console.error('upload-background error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ── Upload de video (antes del POST / para evitar conflicto de middleware) ─────
 router.post('/upload-video', authMiddleware, uploadVideoPost.single('video'), async (req, res) => {
