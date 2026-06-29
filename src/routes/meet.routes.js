@@ -31,8 +31,8 @@ router.post('/text/join', authMiddleware, async (req, res) => {
     const existing = await MeetSession.findOne({ user: userId });
     if (existing) await cleanupSession(existing, io);
 
-    // Obtener género y avatar del usuario
-    const me         = await User.findById(userId).select('gender avatarUrl').lean();
+    // Obtener género y perfil del usuario
+    const me         = await User.findById(userId).select('gender avatarUrl username profileFrame profileFrameUrl').lean();
     const userGender = mapGender(me?.gender);
 
     // Buscar sesión compatible en waiting
@@ -59,17 +59,29 @@ router.post('/text/join', authMiddleware, async (req, res) => {
         status: 'chatting', matchedWith: match.user, roomId, startedAt,
       });
 
-      // Avatar del partner para cada lado
-      const matchUser = await User.findById(match.user).select('avatarUrl').lean();
+      // Perfil del partner para cada lado
+      const matchUser = await User.findById(match.user).select('username avatarUrl profileFrame profileFrameUrl').lean();
+
+      const partnerForJoiner = {
+        _id:             matchUser?._id             || match.user,
+        avatarUrl:       matchUser?.avatarUrl       || null,
+        username:        matchUser?.username         || 'Usuario',
+        profileFrame:    matchUser?.profileFrame     || null,
+        profileFrameUrl: matchUser?.profileFrameUrl  || null,
+      };
+      const partnerForWaiter = {
+        _id:             me?._id             || userId,
+        avatarUrl:       me?.avatarUrl       || null,
+        username:        me?.username         || 'Usuario',
+        profileFrame:    me?.profileFrame     || null,
+        profileFrameUrl: me?.profileFrameUrl  || null,
+      };
 
       // Notificar al usuario en espera (su partner es el que acaba de hacer join = me)
-      io.to(`user:${match.user}`).emit('meet:matched', {
-        roomId, startedAt,
-        partnerAvatar: me?.avatarUrl || null,
-      });
+      io.to(`user:${match.user}`).emit('meet:matched', { roomId, startedAt, partner: partnerForWaiter });
 
       // HTTP response al que hizo join (su partner es el que estaba esperando = matchUser)
-      return res.json({ matched: true, roomId, startedAt, partnerAvatar: matchUser?.avatarUrl || null });
+      return res.json({ matched: true, roomId, startedAt, partner: partnerForJoiner });
     }
 
     // Sin match → poner en espera
@@ -119,15 +131,31 @@ router.post('/text/match-decision', authMiddleware, async (req, res) => {
     });
 
     if (partnerDeleted) {
-      // Ambos aceptaron — nosotros ganamos la carrera → crear chat
+      // Ambos aceptaron — nosotros ganamos la carrera → crear chat (o reutilizar si ya existe)
       await MeetSession.deleteOne({ user: userId });
-      const chat = await Chat.create({
-        participants: [userId, mySession.matchedWith],
-        lastMessageText: '',
-      });
-      io.to(`user:${userId}`).emit('meet:match-accepted',          { chatId: chat._id });
-      io.to(`user:${mySession.matchedWith}`).emit('meet:match-accepted', { chatId: chat._id });
-      return res.json({ chatId: chat._id });
+      const [existing, userA, userB] = await Promise.all([
+        Chat.findOne({ participants: { $all: [userId, mySession.matchedWith], $size: 2 } }),
+        User.findById(userId).select('username avatarUrl profileFrame profileFrameUrl').lean(),
+        User.findById(mySession.matchedWith).select('username avatarUrl profileFrame profileFrameUrl').lean(),
+      ]);
+      const chat = existing || await Chat.create({ participants: [userId, mySession.matchedWith], lastMessageText: '' });
+      const partnerForA = {
+        _id:             userB?._id             || mySession.matchedWith,
+        avatarUrl:       userB?.avatarUrl       || null,
+        username:        userB?.username         || 'Usuario',
+        profileFrame:    userB?.profileFrame     || null,
+        profileFrameUrl: userB?.profileFrameUrl  || null,
+      };
+      const partnerForB = {
+        _id:             userA?._id             || userId,
+        avatarUrl:       userA?.avatarUrl       || null,
+        username:        userA?.username         || 'Usuario',
+        profileFrame:    userA?.profileFrame     || null,
+        profileFrameUrl: userA?.profileFrameUrl  || null,
+      };
+      io.to(`user:${userId}`).emit('meet:match-accepted',               { chatId: chat._id, partner: partnerForA });
+      io.to(`user:${mySession.matchedWith}`).emit('meet:match-accepted', { chatId: chat._id, partner: partnerForB });
+      return res.json({ chatId: chat._id, partner: partnerForA });
     }
 
     // Partner aún no decidió
