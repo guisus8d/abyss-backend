@@ -82,6 +82,22 @@ router.get('/circles/public', async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+router.get('/circles/search', authMiddleware, async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || q.trim().length < 2) return res.json({ circles: [] });
+    const regex = new RegExp(q.trim(), 'i');
+    const circles = await Group.find({
+      isCircle: true,
+      $or: [{ name: regex }, { hashtags: regex }],
+    })
+      .select('name imageUrl membersCount hashtags isActive')
+      .limit(5)
+      .lean();
+    res.json({ circles });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Activar / desactivar círculo (admin o co-admin)
 router.patch('/circles/:id/toggle-active', authMiddleware, async (req, res) => {
   try {
