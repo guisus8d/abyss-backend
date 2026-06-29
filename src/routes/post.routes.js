@@ -11,6 +11,17 @@ const {
   getPost, reactPost, addComment, deletePost,
 } = require('../controllers/post.controller');
 
+// ── Upload de imagen de bloque de contenido ───────────────────────────────────
+router.post('/upload-image', authMiddleware, uploadPost.single('image'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No se recibio ningun archivo' });
+    res.json({ imageUrl: req.file.path });
+  } catch (err) {
+    console.error('upload-image error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Upload de fondo de noticia ────────────────────────────────────────────────
 router.post('/upload-background', authMiddleware, uploadPostBg.single('background'), async (req, res) => {
   try {
