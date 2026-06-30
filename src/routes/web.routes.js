@@ -194,4 +194,107 @@ router.get('/user/:username', async (req, res) => {
   }
 });
 
+// ── GET /mod/bugs — panel admin de reportes de bugs ───────────────────────────
+router.get('/mod/bugs', async (req, res) => {
+  const jwt        = require('jsonwebtoken');
+  const BugReport  = require('../models/BugReport');
+
+  const { token, status: filterStatus } = req.query;
+  if (!token) {
+    return res.status(401).send('<p style="color:#fff;font-family:sans-serif;padding:24px">Token requerido: /mod/bugs?token=TU_JWT</p>');
+  }
+
+  let adminUser;
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    adminUser     = await User.findById(decoded.id).select('role username').lean();
+  } catch {
+    return res.status(401).send('<p style="color:#fff;font-family:sans-serif;padding:24px">Token invalido o expirado.</p>');
+  }
+
+  if (!adminUser || adminUser.role !== 'admin') {
+    return res.status(403).send('<p style="color:#fff;font-family:sans-serif;padding:24px">Acceso denegado.</p>');
+  }
+
+  try {
+    const filter = filterStatus ? { status: filterStatus } : {};
+    const bugs   = await BugReport.find(filter)
+      .sort({ createdAt: -1 })
+      .populate('user', 'username avatarUrl')
+      .lean();
+
+    const STATUS_LABEL = { new: 'Nuevo', reviewing: 'Revisando', resolved: 'Resuelto' };
+    const STATUS_COLOR = { new: '#f97316', reviewing: '#2979ff', resolved: '#00e5cc' };
+
+    const rows = bugs.map(b => {
+      const avatar = b.user?.avatarUrl
+        ? `<img src="${esc(b.user.avatarUrl)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover"/>`
+        : `<div style="width:32px;height:32px;border-radius:50%;background:rgba(0,229,204,0.12);display:flex;align-items:center;justify-content:center;color:#00e5cc;font-weight:700">${esc((b.user?.username || '?')[0].toUpperCase())}</div>`;
+      const date = new Date(b.createdAt).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+      const imgTag = b.imageUrl
+        ? `<a href="${esc(b.imageUrl)}" target="_blank"><img src="${esc(b.imageUrl)}" style="max-width:180px;max-height:120px;border-radius:8px;object-fit:cover;display:block;margin-top:6px"/></a>`
+        : '';
+      const statusColor = STATUS_COLOR[b.status] || '#fff';
+      const statusLabel = STATUS_LABEL[b.status] || b.status;
+
+      const nextMap  = { new: 'reviewing', reviewing: 'resolved', resolved: 'new' };
+      const nextNext = nextMap[b.status] || 'new';
+      const nextLabel = STATUS_LABEL[nextNext];
+
+      return `
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px;display:flex;gap:14px;align-items:flex-start">
+          <div style="flex-shrink:0">${avatar}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:10;flex-wrap:wrap">
+              <span style="color:#e8f4f8;font-weight:700;font-size:14px">${esc(b.user?.username || 'usuario')}</span>
+              <span style="font-size:11px;color:rgba(255,255,255,0.35)">${date}</span>
+              ${b.screen ? `<span style="font-size:11px;background:rgba(255,255,255,0.06);padding:2px 8px;border-radius:6px;color:rgba(255,255,255,0.5)">${esc(b.screen)}</span>` : ''}
+              ${b.deviceInfo ? `<span style="font-size:11px;color:rgba(255,255,255,0.3)">${esc(b.deviceInfo)}</span>` : ''}
+              <span style="font-size:11px;font-weight:700;color:${statusColor};background:${statusColor}22;padding:2px 10px;border-radius:20px">${statusLabel}</span>
+            </div>
+            <p style="color:#e8f4f8;font-size:13px;line-height:1.6;margin-top:8px;white-space:pre-wrap;word-break:break-word">${esc(b.description)}</p>
+            ${imgTag}
+            <button onclick="updateStatus('${b._id}','${nextNext}')"
+              style="margin-top:10px;padding:5px 14px;border-radius:8px;border:1px solid ${statusColor}44;background:${statusColor}18;color:${statusColor};font-size:12px;cursor:pointer;font-weight:600">
+              Marcar como: ${nextLabel}
+            </button>
+          </div>
+        </div>`;
+    }).join('');
+
+    const filterLinks = ['', 'new', 'reviewing', 'resolved'].map(s => {
+      const label  = s ? (STATUS_LABEL[s] || s) : 'Todos';
+      const active = (filterStatus || '') === s;
+      return `<a href="/mod/bugs?token=${encodeURIComponent(token)}${s ? '&status=' + s : ''}"
+        style="padding:6px 16px;border-radius:20px;border:1px solid ${active ? '#00e5cc' : 'rgba(255,255,255,0.12)'};color:${active ? '#00e5cc' : 'rgba(255,255,255,0.5)'};font-size:13px;text-decoration:none">${label}</a>`;
+    }).join('');
+
+    const body = `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10">
+        <h2 style="color:#e8f4f8;font-size:18px;font-weight:800">Reportes de Bugs <span style="color:rgba(255,255,255,0.4);font-size:14px;font-weight:400">(${bugs.length})</span></h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${filterLinks}</div>
+      </div>
+      ${bugs.length === 0
+        ? '<p style="color:rgba(255,255,255,0.35);text-align:center;padding:40px 0">Sin reportes con este filtro.</p>'
+        : `<div style="display:flex;flex-direction:column;gap:12px">${rows}</div>`
+      }
+      <script>
+        async function updateStatus(id, status) {
+          const token = new URLSearchParams(location.search).get('token');
+          const r = await fetch('/api/bug-reports/' + id + '/status', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+            body: JSON.stringify({ status })
+          });
+          if (r.ok) location.reload();
+          else alert('Error al actualizar el estado');
+        }
+      </script>`;
+
+    res.send(page('Reportes de Bugs — Admin', `<div style="max-width:860px;margin:28px auto;padding:0 16px">${body}</div>`));
+  } catch (err) {
+    res.status(500).send(page('Error', `<div class="not-found">Error: ${esc(err.message)}</div>`));
+  }
+});
+
 module.exports = router;

@@ -181,6 +181,17 @@ const videoPostStorage = new CloudinaryStorage({
 });
 const uploadVideoPost = multer({ storage: videoPostStorage, limits: { fileSize: 50 * 1024 * 1024 } });
 
+// ── Bug reports ───────────────────────────────────────────────────────────────
+const bugReportStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder:          'abbys/bug-reports',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation:  [{ width: 1280, crop: 'limit', quality: 'auto:good' }],
+  },
+});
+const uploadBugReport = multer({ storage: bugReportStorage, limits: { fileSize: 10 * 1024 * 1024 } });
+
 // ── Audio ─────────────────────────────────────────────────────────────────────
 const audioStorage = new CloudinaryStorage({
   cloudinary,
@@ -195,6 +206,7 @@ const uploadAudio = multer({ storage: audioStorage, limits: { fileSize: 20 * 102
 module.exports = {
   cloudinary,
   uploadAvatar,
+  uploadBugReport,
   uploadGroupBg,
   uploadPost,
   uploadVideoPost,
