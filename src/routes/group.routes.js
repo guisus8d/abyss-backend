@@ -343,7 +343,7 @@ router.patch('/:id', authMiddleware, uploadAvatar.single('image'), async (req, r
       : group.members.some(m => m.user.toString() === req.user._id.toString() && m.role === 'admin');
     if (!canEdit) return res.status(403).json({ error: 'Solo admins' });
 
-    const { name, description, bgColor, imageUrl, hashtags } = req.body;
+    const { name, description, bgColor, imageUrl, hashtags, welcomeMessage, announcementBanner } = req.body;
     if (name)                      group.name        = name.trim();
     if (description !== undefined) group.description = description.trim();
     if (bgColor !== undefined)     group.bgColor     = bgColor;
@@ -360,6 +360,8 @@ router.patch('/:id', authMiddleware, uploadAvatar.single('image'), async (req, r
         }
       } catch {}
     }
+    if (welcomeMessage !== undefined)     group.welcomeMessage     = welcomeMessage.toString().trim().slice(0, 500);
+    if (announcementBanner !== undefined) group.announcementBanner = announcementBanner.toString().trim().slice(0, 300);
     await group.save();
     await group.populate('members.user', 'username avatarUrl profileFrame profileFrameUrl');
     res.json({ group });

@@ -73,8 +73,10 @@ const groupSchema = new mongoose.Schema({
   isActive:        { type: Boolean, default: true },
   activatedAt:     { type: Date,    default: null },
   hashtags:        [{ type: String }],
-  rules:           [{ type: String, maxlength: 200 }],
-  membersCount:    { type: Number,  default: 0 },
+  rules:              [{ type: String, maxlength: 200 }],
+  welcomeMessage:     { type: String, default: '', maxlength: 500 },
+  announcementBanner: { type: String, default: '', maxlength: 300 },
+  membersCount:       { type: Number, default: 0 },
 }, { timestamps: true });
 
 groupSchema.index({ 'members.user': 1 });
