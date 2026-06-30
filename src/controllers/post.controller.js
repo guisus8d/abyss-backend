@@ -201,6 +201,7 @@ async function getPost(req, res) {
 
     res.json({ post: postObj, totalComments: total, hasMore: page * limit < total, commentsPage: page });
   } catch (err) {
+    console.error('[GET-POST-ERROR]', err.message, err.stack);
     res.status(500).json({ error: err.message });
   }
 }
