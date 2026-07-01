@@ -80,7 +80,7 @@ router.get('/circles/public', async (req, res) => {
     const circles = await Group
       .find(filter)
       .sort({ isActive: -1, membersCount: -1 })
-      .limit(30)
+      .limit(3)
       .select('name imageUrl membersCount hashtags isCircle isPublic isActive');
     res.json({ circles });
   } catch (err) { res.status(500).json({ error: err.message }); }
