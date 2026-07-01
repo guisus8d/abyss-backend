@@ -228,8 +228,11 @@ function pagerLinks(base, page, hasMore) {
   return `<div style="display:flex;gap:10px;justify-content:center;margin-top:24px">${prev}${next}</div>`;
 }
 
+const MOD_CSP = "default-src 'self'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https://res.cloudinary.com; style-src 'self' 'unsafe-inline';";
+
 // ── GET /mod/bugs ─────────────────────────────────────────────────────────────
 router.get('/mod/bugs', async (req, res) => {
+  res.setHeader('Content-Security-Policy', MOD_CSP);
   const BugReport = require('../models/BugReport');
   const { token, status: filterStatus, page: pageQ } = req.query;
 
@@ -324,6 +327,7 @@ router.get('/mod/bugs', async (req, res) => {
 
 // ── GET /mod/reports ──────────────────────────────────────────────────────────
 router.get('/mod/reports', async (req, res) => {
+  res.setHeader('Content-Security-Policy', MOD_CSP);
   const Report = require('../models/Report');
   const { token, status: filterStatus, type: filterType, page: pageQ } = req.query;
 
