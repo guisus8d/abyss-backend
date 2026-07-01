@@ -204,7 +204,7 @@ router.post('/circles/:id/join', authMiddleware, async (req, res) => {
     }
 
     const populated = await Group.findById(circle._id)
-      .select('name description imageUrl hashtags membersCount members lastMessage lastMessageText creator isCircle isPublic isActive');
+      .select('name description imageUrl hashtags membersCount members lastMessage lastMessageText creator isCircle isPublic isActive welcomeMessage announcementBanner rules');
     res.json({ group: populated });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
