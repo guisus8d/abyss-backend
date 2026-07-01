@@ -75,14 +75,17 @@ router.get('/circles/mine', authMiddleware, async (req, res) => {
 router.get('/circles/public', async (req, res) => {
   try {
     const { hashtag } = req.query;
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(20, parseInt(req.query.limit) || 3);
     const filter = { isCircle: true, isPublic: true };
     if (hashtag) filter.hashtags = hashtag;
     const circles = await Group
       .find(filter)
       .sort({ isActive: -1, membersCount: -1 })
-      .limit(3)
+      .skip((page - 1) * limit)
+      .limit(limit)
       .select('name imageUrl membersCount hashtags isCircle isPublic isActive');
-    res.json({ circles });
+    res.json({ circles, hasMore: circles.length === limit });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
