@@ -148,6 +148,18 @@ const storeLogoStorage = new CloudinaryStorage({
 });
 const uploadStoreLogo = multer({ storage: storeLogoStorage, limits: { fileSize: 5 * 1024 * 1024 } });
 
+// ── Imagen de grupo / círculo (logo / banner) ────────────────────────────────
+const groupImageStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder:          'abbys/group-images',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+    resource_type:   'auto',
+    transformation:  [{ width: 1280, crop: 'limit', quality: 'auto:best' }],
+  },
+});
+const uploadGroupImage = multer({ storage: groupImageStorage, limits: { fileSize: 10 * 1024 * 1024 } });
+
 // ── Fondos de grupo ───────────────────────────────────────────────────────────
 const groupBgStorage = new CloudinaryStorage({
   cloudinary,
@@ -206,6 +218,7 @@ const uploadAudio = multer({ storage: audioStorage, limits: { fileSize: 20 * 102
 module.exports = {
   cloudinary,
   uploadAvatar,
+  uploadGroupImage,
   uploadBugReport,
   uploadGroupBg,
   uploadPost,

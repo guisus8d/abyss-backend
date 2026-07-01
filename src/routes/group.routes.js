@@ -2,7 +2,7 @@ const router = require('express').Router();
 const Group  = require('../models/Group');
 const User   = require('../models/User');
 const { authMiddleware } = require('../middlewares/auth');
-const { uploadAvatar, uploadGroupBg } = require('../config/cloudinary');
+const { uploadAvatar, uploadGroupImage, uploadGroupBg } = require('../config/cloudinary');
 
 function getIO() {
   try { return require('../sockets').getIO(); } catch { return null; }
@@ -31,7 +31,7 @@ async function emitSystemMessage(group, text, action) {
 // ─── Círculos ──────────────────────────────────────────────────────────────────
 
 // Crear círculo
-router.post('/circles', authMiddleware, uploadAvatar.single('image'), async (req, res) => {
+router.post('/circles', authMiddleware, uploadGroupImage.single('image'), async (req, res) => {
   try {
     const { name, description, hashtags } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: 'Nombre requerido' });
@@ -333,7 +333,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
 });
 
 // Editar grupo — admin (o co-admin si es círculo)
-router.patch('/:id', authMiddleware, uploadAvatar.single('image'), async (req, res) => {
+router.patch('/:id', authMiddleware, uploadGroupImage.single('image'), async (req, res) => {
   try {
     const group = await Group.findById(req.params.id);
     if (!group) return res.status(404).json({ error: 'Grupo no encontrado' });
