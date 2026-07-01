@@ -257,7 +257,7 @@ router.post('/circles/:id/share', authMiddleware, async (req, res) => {
         circleRef:    circle._id,
         imageUrl:     circle.imageUrl || null,
         title:        circle.name,
-        content:      circle.description || '',
+        content:      circle.description?.trim() || `Únete a la fiesta ${circle.name}`,
         tags:         circle.hashtags || [],
         membersCount: circle.membersCount || circle.members?.length || 0,
       });
