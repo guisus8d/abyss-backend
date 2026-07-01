@@ -16,6 +16,7 @@ router.post('/', authMiddleware, uploadBugReport.single('image'), async (req, re
 
     const bug = await BugReport.create({
       user:        req.user._id,
+      username:    req.user.username,
       description: description.trim(),
       imageUrl:    req.file?.path || null,
       screen:      screen   || null,
@@ -50,6 +51,17 @@ router.patch('/:id/status', authMiddleware, adminOnly, async (req, res) => {
       return res.status(400).json({ error: 'Status invalido' });
     }
     await BugReport.findByIdAndUpdate(req.params.id, { status });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/bug-reports/:id — eliminar reporte (solo admin)
+router.delete('/:id', authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const deleted = await BugReport.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ error: 'Reporte no encontrado' });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });

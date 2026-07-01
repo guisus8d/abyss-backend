@@ -254,10 +254,16 @@ router.get('/mod/bugs', async (req, res) => {
             </div>
             <p style="color:#e8f4f8;font-size:13px;line-height:1.6;margin-top:8px;white-space:pre-wrap;word-break:break-word">${esc(b.description)}</p>
             ${imgTag}
-            <button onclick="updateStatus('${b._id}','${nextNext}')"
-              style="margin-top:10px;padding:5px 14px;border-radius:8px;border:1px solid ${statusColor}44;background:${statusColor}18;color:${statusColor};font-size:12px;cursor:pointer;font-weight:600">
-              Marcar como: ${nextLabel}
-            </button>
+            <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+              <button onclick="updateStatus('${b._id}','${nextNext}')"
+                style="padding:5px 14px;border-radius:8px;border:1px solid ${statusColor}44;background:${statusColor}18;color:${statusColor};font-size:12px;cursor:pointer;font-weight:600">
+                Marcar como: ${nextLabel}
+              </button>
+              <button onclick="deleteReport('${b._id}')"
+                style="padding:5px 14px;border-radius:8px;border:1px solid rgba(239,68,68,0.35);background:rgba(239,68,68,0.1);color:#ef4444;font-size:12px;cursor:pointer;font-weight:600">
+                Eliminar
+              </button>
+            </div>
           </div>
         </div>`;
     }).join('');
@@ -288,6 +294,16 @@ router.get('/mod/bugs', async (req, res) => {
           });
           if (r.ok) location.reload();
           else alert('Error al actualizar el estado');
+        }
+        async function deleteReport(id) {
+          if (!confirm('Eliminar este reporte?')) return;
+          const token = new URLSearchParams(location.search).get('token');
+          const r = await fetch('/api/bug-reports/' + id, {
+            method: 'DELETE',
+            headers: { Authorization: 'Bearer ' + token }
+          });
+          if (r.ok) location.reload();
+          else alert('Error al eliminar el reporte');
         }
       </script>`;
 
