@@ -194,73 +194,91 @@ router.get('/user/:username', async (req, res) => {
   }
 });
 
-// ── GET /mod/bugs — panel admin de reportes de bugs ───────────────────────────
-router.get('/mod/bugs', async (req, res) => {
-  const jwt        = require('jsonwebtoken');
-  const BugReport  = require('../models/BugReport');
-
-  const { token, status: filterStatus } = req.query;
-  if (!token) {
-    return res.status(401).send('<p style="color:#fff;font-family:sans-serif;padding:24px">Token requerido: /mod/bugs?token=TU_JWT</p>');
-  }
-
-  let adminUser;
+// ── Helpers compartidos para paneles mod ──────────────────────────────────────
+async function verifyAdmin(token) {
+  if (!token) return null;
+  const jwt = require('jsonwebtoken');
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    adminUser     = await User.findById(decoded.id).select('role username').lean();
-  } catch {
-    return res.status(401).send('<p style="color:#fff;font-family:sans-serif;padding:24px">Token invalido o expirado.</p>');
-  }
+    const u = await User.findById(decoded.id).select('role username').lean();
+    return u?.role === 'admin' ? u : null;
+  } catch { return null; }
+}
 
-  if (!adminUser || adminUser.role !== 'admin') {
-    return res.status(403).send('<p style="color:#fff;font-family:sans-serif;padding:24px">Acceso denegado.</p>');
-  }
+function modNavBar(token, active) {
+  const links = [
+    { href: `/mod/bugs?token=${encodeURIComponent(token)}`,     label: 'Bugs' },
+    { href: `/mod/reports?token=${encodeURIComponent(token)}`,  label: 'Reportes' },
+  ];
+  return `<div style="display:flex;gap:8px;margin-bottom:24px;flex-wrap:wrap">
+    ${links.map(l => `<a href="${l.href}" style="padding:7px 20px;border-radius:20px;border:1px solid ${active===l.label?'#00e5cc':'rgba(255,255,255,0.12)'};color:${active===l.label?'#00e5cc':'rgba(255,255,255,0.5)'};font-size:13px;font-weight:600;text-decoration:none">${l.label}</a>`).join('')}
+  </div>`;
+}
+
+function fmtDate(d) {
+  const dt = new Date(d);
+  const pad = n => String(n).padStart(2, '0');
+  return `${pad(dt.getDate())}/${pad(dt.getMonth()+1)}/${dt.getFullYear()} ${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+
+function pagerLinks(base, page, hasMore) {
+  const prev = page > 1 ? `<a href="${base}&page=${page-1}" style="padding:6px 18px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.6);font-size:13px;text-decoration:none">← Anterior</a>` : '';
+  const next = hasMore   ? `<a href="${base}&page=${page+1}" style="padding:6px 18px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.6);font-size:13px;text-decoration:none">Siguiente →</a>` : '';
+  if (!prev && !next) return '';
+  return `<div style="display:flex;gap:10px;justify-content:center;margin-top:24px">${prev}${next}</div>`;
+}
+
+// ── GET /mod/bugs ─────────────────────────────────────────────────────────────
+router.get('/mod/bugs', async (req, res) => {
+  const BugReport = require('../models/BugReport');
+  const { token, status: filterStatus, page: pageQ } = req.query;
+
+  if (!token) return res.status(401).send('<p style="color:#fff;font-family:sans-serif;padding:24px">Token requerido.</p>');
+  const adminUser = await verifyAdmin(token);
+  if (!adminUser) return res.status(403).send('<p style="color:#fff;font-family:sans-serif;padding:24px">Acceso denegado.</p>');
 
   try {
+    const PAGE = 20;
+    const page = Math.max(1, parseInt(pageQ) || 1);
     const filter = filterStatus ? { status: filterStatus } : {};
-    const bugs   = await BugReport.find(filter)
-      .sort({ createdAt: -1 })
-      .populate('user', 'username avatarUrl')
-      .lean();
+    const [bugs, total] = await Promise.all([
+      BugReport.find(filter).sort({ createdAt: -1 }).skip((page-1)*PAGE).limit(PAGE)
+        .populate('user', 'username avatarUrl').lean(),
+      BugReport.countDocuments(filter),
+    ]);
 
     const STATUS_LABEL = { new: 'Nuevo', reviewing: 'Revisando', resolved: 'Resuelto' };
-    const STATUS_COLOR = { new: '#f97316', reviewing: '#2979ff', resolved: '#00e5cc' };
+    const STATUS_COLOR = { new: '#ef4444', reviewing: '#f59e0b', resolved: '#00e5cc' };
 
     const rows = bugs.map(b => {
       const avatar = b.user?.avatarUrl
-        ? `<img src="${esc(b.user.avatarUrl)}" style="width:32px;height:32px;border-radius:50%;object-fit:cover"/>`
-        : `<div style="width:32px;height:32px;border-radius:50%;background:rgba(0,229,204,0.12);display:flex;align-items:center;justify-content:center;color:#00e5cc;font-weight:700">${esc((b.user?.username || '?')[0].toUpperCase())}</div>`;
-      const date = new Date(b.createdAt).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' });
+        ? `<img src="${esc(b.user.avatarUrl)}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0"/>`
+        : `<div style="width:36px;height:36px;border-radius:50%;background:rgba(0,229,204,0.12);display:flex;align-items:center;justify-content:center;color:#00e5cc;font-weight:700;font-size:14px;flex-shrink:0">${esc((b.username || b.user?.username || '?')[0].toUpperCase())}</div>`;
+      const sc = STATUS_COLOR[b.status] || '#fff';
+      const sl = STATUS_LABEL[b.status] || b.status;
+      const nextMap = { new: 'reviewing', reviewing: 'resolved', resolved: 'new' };
+      const nextStatus = nextMap[b.status] || 'new';
       const imgTag = b.imageUrl
-        ? `<a href="${esc(b.imageUrl)}" target="_blank"><img src="${esc(b.imageUrl)}" style="max-width:180px;max-height:120px;border-radius:8px;object-fit:cover;display:block;margin-top:6px"/></a>`
+        ? `<a href="${esc(b.imageUrl)}" target="_blank"><img src="${esc(b.imageUrl)}" style="width:120px;height:80px;border-radius:8px;object-fit:cover;display:block;margin-top:8px;border:1px solid rgba(255,255,255,0.1)"/></a>`
         : '';
-      const statusColor = STATUS_COLOR[b.status] || '#fff';
-      const statusLabel = STATUS_LABEL[b.status] || b.status;
-
-      const nextMap  = { new: 'reviewing', reviewing: 'resolved', resolved: 'new' };
-      const nextNext = nextMap[b.status] || 'new';
-      const nextLabel = STATUS_LABEL[nextNext];
-
       return `
-        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px;display:flex;gap:14px;align-items:flex-start">
-          <div style="flex-shrink:0">${avatar}</div>
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;display:flex;gap:12px;align-items:flex-start">
+          ${avatar}
           <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:10;flex-wrap:wrap">
-              <span style="color:#e8f4f8;font-weight:700;font-size:14px">${esc(b.user?.username || 'usuario')}</span>
-              <span style="font-size:11px;color:rgba(255,255,255,0.35)">${date}</span>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+              <span style="color:#e8f4f8;font-weight:700;font-size:14px">${esc(b.username || b.user?.username || 'usuario')}</span>
+              <span style="color:rgba(255,255,255,0.3);font-size:11px">${fmtDate(b.createdAt)}</span>
               ${b.screen ? `<span style="font-size:11px;background:rgba(255,255,255,0.06);padding:2px 8px;border-radius:6px;color:rgba(255,255,255,0.5)">${esc(b.screen)}</span>` : ''}
-              ${b.deviceInfo ? `<span style="font-size:11px;color:rgba(255,255,255,0.3)">${esc(b.deviceInfo)}</span>` : ''}
-              <span style="font-size:11px;font-weight:700;color:${statusColor};background:${statusColor}22;padding:2px 10px;border-radius:20px">${statusLabel}</span>
+              ${b.deviceInfo ? `<span style="font-size:11px;color:rgba(255,255,255,0.25)">${esc(b.deviceInfo)}</span>` : ''}
+              <span style="font-size:11px;font-weight:700;color:${sc};background:${sc}22;padding:2px 10px;border-radius:20px">${sl}</span>
             </div>
-            <p style="color:#e8f4f8;font-size:13px;line-height:1.6;margin-top:8px;white-space:pre-wrap;word-break:break-word">${esc(b.description)}</p>
+            <p style="color:#cbd5e1;font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word">${esc(b.description)}</p>
             ${imgTag}
             <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-              <button onclick="updateStatus('${b._id}','${nextNext}')"
-                style="padding:5px 14px;border-radius:8px;border:1px solid ${statusColor}44;background:${statusColor}18;color:${statusColor};font-size:12px;cursor:pointer;font-weight:600">
-                Marcar como: ${nextLabel}
+              <button onclick="bugStatus('${b._id}','${nextStatus}')" style="padding:5px 14px;border-radius:8px;border:1px solid ${sc}44;background:${sc}18;color:${sc};font-size:12px;cursor:pointer;font-weight:600">
+                Marcar: ${STATUS_LABEL[nextStatus]}
               </button>
-              <button onclick="deleteReport('${b._id}')"
-                style="padding:5px 14px;border-radius:8px;border:1px solid rgba(239,68,68,0.35);background:rgba(239,68,68,0.1);color:#ef4444;font-size:12px;cursor:pointer;font-weight:600">
+              <button onclick="bugDelete('${b._id}')" style="padding:5px 14px;border-radius:8px;border:1px solid rgba(239,68,68,0.35);background:rgba(239,68,68,0.1);color:#ef4444;font-size:12px;cursor:pointer;font-weight:600">
                 Eliminar
               </button>
             </div>
@@ -268,46 +286,172 @@ router.get('/mod/bugs', async (req, res) => {
         </div>`;
     }).join('');
 
+    const baseUrl = `/mod/bugs?token=${encodeURIComponent(token)}${filterStatus ? '&status='+filterStatus : ''}`;
     const filterLinks = ['', 'new', 'reviewing', 'resolved'].map(s => {
-      const label  = s ? (STATUS_LABEL[s] || s) : 'Todos';
+      const label = s ? (STATUS_LABEL[s] || s) : 'Todos';
       const active = (filterStatus || '') === s;
-      return `<a href="/mod/bugs?token=${encodeURIComponent(token)}${s ? '&status=' + s : ''}"
-        style="padding:6px 16px;border-radius:20px;border:1px solid ${active ? '#00e5cc' : 'rgba(255,255,255,0.12)'};color:${active ? '#00e5cc' : 'rgba(255,255,255,0.5)'};font-size:13px;text-decoration:none">${label}</a>`;
+      return `<a href="/mod/bugs?token=${encodeURIComponent(token)}${s?'&status='+s:''}" style="padding:6px 16px;border-radius:20px;border:1px solid ${active?'#00e5cc':'rgba(255,255,255,0.12)'};color:${active?'#00e5cc':'rgba(255,255,255,0.5)'};font-size:13px;text-decoration:none">${label}</a>`;
     }).join('');
 
     const body = `
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10">
-        <h2 style="color:#e8f4f8;font-size:18px;font-weight:800">Reportes de Bugs <span style="color:rgba(255,255,255,0.4);font-size:14px;font-weight:400">(${bugs.length})</span></h2>
+      ${modNavBar(token, 'Bugs')}
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10">
+        <h2 style="color:#e8f4f8;font-size:18px;font-weight:800">Reportes de Bugs <span style="color:rgba(255,255,255,0.35);font-size:13px;font-weight:400">${total} total · pag. ${page}</span></h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap">${filterLinks}</div>
       </div>
       ${bugs.length === 0
-        ? '<p style="color:rgba(255,255,255,0.35);text-align:center;padding:40px 0">Sin reportes con este filtro.</p>'
-        : `<div style="display:flex;flex-direction:column;gap:12px">${rows}</div>`
-      }
+        ? '<p style="color:rgba(255,255,255,0.35);text-align:center;padding:40px 0">Sin reportes.</p>'
+        : `<div style="display:flex;flex-direction:column;gap:10px">${rows}</div>`}
+      ${pagerLinks(baseUrl, page, bugs.length === PAGE)}
       <script>
-        async function updateStatus(id, status) {
-          const token = new URLSearchParams(location.search).get('token');
-          const r = await fetch('/api/bug-reports/' + id + '/status', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-            body: JSON.stringify({ status })
-          });
-          if (r.ok) location.reload();
-          else alert('Error al actualizar el estado');
+        const tok = new URLSearchParams(location.search).get('token');
+        async function bugStatus(id, status) {
+          const r = await fetch('/api/bug-reports/'+id+'/status',{method:'PATCH',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({status})});
+          if(r.ok) location.reload(); else alert('Error');
         }
-        async function deleteReport(id) {
-          if (!confirm('Eliminar este reporte?')) return;
-          const token = new URLSearchParams(location.search).get('token');
-          const r = await fetch('/api/bug-reports/' + id, {
-            method: 'DELETE',
-            headers: { Authorization: 'Bearer ' + token }
-          });
-          if (r.ok) location.reload();
-          else alert('Error al eliminar el reporte');
+        async function bugDelete(id) {
+          if(!confirm('Eliminar este reporte?')) return;
+          const r = await fetch('/api/bug-reports/'+id,{method:'DELETE',headers:{Authorization:'Bearer '+tok}});
+          if(r.ok) location.reload(); else alert('Error');
         }
       </script>`;
 
-    res.send(page('Reportes de Bugs — Admin', `<div style="max-width:860px;margin:28px auto;padding:0 16px">${body}</div>`));
+    res.send(page('Bugs — Admin', `<div style="max-width:900px;margin:28px auto;padding:0 16px">${body}</div>`));
+  } catch (err) {
+    res.status(500).send(page('Error', `<div class="not-found">Error: ${esc(err.message)}</div>`));
+  }
+});
+
+// ── GET /mod/reports ──────────────────────────────────────────────────────────
+router.get('/mod/reports', async (req, res) => {
+  const Report = require('../models/Report');
+  const { token, status: filterStatus, type: filterType, page: pageQ } = req.query;
+
+  if (!token) return res.status(401).send('<p style="color:#fff;font-family:sans-serif;padding:24px">Token requerido.</p>');
+  const adminUser = await verifyAdmin(token);
+  if (!adminUser) return res.status(403).send('<p style="color:#fff;font-family:sans-serif;padding:24px">Acceso denegado.</p>');
+
+  try {
+    const PAGE = 20;
+    const page = Math.max(1, parseInt(pageQ) || 1);
+    const filter = {};
+    if (filterStatus && filterStatus !== 'all') filter.status = filterStatus;
+    if (filterType   && filterType   !== 'all') filter.type   = filterType;
+
+    const [reports, total] = await Promise.all([
+      Report.find(filter)
+        .sort({ createdAt: -1 })
+        .skip((page-1)*PAGE).limit(PAGE)
+        .populate('reporter',       'username avatarUrl')
+        .populate('targetAuthorId', 'username')
+        .populate('resolvedBy',     'username')
+        .lean(),
+      Report.countDocuments(filter),
+    ]);
+
+    const STATUS_LABEL = { pending: 'Pendiente', reviewed: 'Revisado', dismissed: 'Descartado' };
+    const STATUS_COLOR = { pending: '#ef4444', reviewed: '#00e5cc', dismissed: '#6b7280' };
+    const TYPE_LABEL   = { post: 'Post', user: 'Usuario', group: 'Grupo' };
+    const TYPE_COLOR   = { post: '#2979ff', user: '#a855f7', group: '#f59e0b' };
+
+    const rows = reports.map(r => {
+      const avatar = r.reporter?.avatarUrl
+        ? `<img src="${esc(r.reporter.avatarUrl)}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0"/>`
+        : `<div style="width:36px;height:36px;border-radius:50%;background:rgba(0,229,204,0.12);display:flex;align-items:center;justify-content:center;color:#00e5cc;font-weight:700;font-size:14px;flex-shrink:0">${esc((r.reporter?.username||'?')[0].toUpperCase())}</div>`;
+
+      const sc  = STATUS_COLOR[r.status] || '#fff';
+      const sl  = STATUS_LABEL[r.status] || r.status;
+      const tc  = TYPE_COLOR[r.type]   || '#fff';
+      const tl  = TYPE_LABEL[r.type]   || r.type;
+
+      const evidenceImgs = (r.images||[]).map(img =>
+        `<a href="${esc(img.url)}" target="_blank"><img src="${esc(img.url)}" style="width:90px;height:60px;border-radius:8px;object-fit:cover;border:1px solid rgba(255,255,255,0.1)"/></a>`
+      ).join('');
+
+      const actionBtns = [];
+      if (r.status === 'pending') {
+        actionBtns.push(`<button onclick="repAction('${r._id}','reviewed')" style="padding:5px 12px;border-radius:8px;border:1px solid #00e5cc44;background:#00e5cc18;color:#00e5cc;font-size:12px;cursor:pointer;font-weight:600">Revisado</button>`);
+        actionBtns.push(`<button onclick="repAction('${r._id}','dismissed')" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(107,114,128,0.4);background:rgba(107,114,128,0.1);color:#9ca3af;font-size:12px;cursor:pointer;font-weight:600">Descartar</button>`);
+      }
+      if (r.type === 'post') {
+        actionBtns.push(`<button onclick="delPost('${r._id}')" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(239,68,68,0.35);background:rgba(239,68,68,0.1);color:#ef4444;font-size:12px;cursor:pointer;font-weight:600">Eliminar post</button>`);
+      }
+      if (r.type === 'post' || r.type === 'user') {
+        actionBtns.push(`<button onclick="banUser('${r._id}')" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(239,68,68,0.5);background:rgba(239,68,68,0.15);color:#fca5a5;font-size:12px;cursor:pointer;font-weight:600">Banear usuario</button>`);
+      }
+      actionBtns.push(`<button onclick="repDelete('${r._id}')" style="padding:5px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.4);font-size:12px;cursor:pointer">Eliminar reporte</button>`);
+
+      return `
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;display:flex;gap:12px;align-items:flex-start">
+          ${avatar}
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+              <span style="color:#e8f4f8;font-weight:700;font-size:14px">${esc(r.reporter?.username||'?')}</span>
+              <span style="font-size:11px;font-weight:700;color:${tc};background:${tc}22;padding:2px 8px;border-radius:6px">${tl}</span>
+              <span style="font-size:11px;font-weight:700;color:${sc};background:${sc}22;padding:2px 10px;border-radius:20px">${sl}</span>
+              <span style="color:rgba(255,255,255,0.3);font-size:11px">${fmtDate(r.createdAt)}</span>
+            </div>
+            ${r.targetName ? `<div style="color:rgba(255,255,255,0.55);font-size:12px;margin-bottom:6px">Objetivo: <span style="color:#e8f4f8;font-weight:600">${esc(r.targetName)}</span>${r.targetAuthorId?.username ? ` · autor: <span style="color:#e8f4f8">${esc(r.targetAuthorId.username)}</span>` : ''}</div>` : ''}
+            <div style="margin-bottom:6px"><span style="color:#f59e0b;font-weight:600;font-size:12px">${esc(r.reason)}</span></div>
+            ${r.details ? `<p style="color:#94a3b8;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word;margin-bottom:8px">${esc(r.details)}</p>` : ''}
+            ${evidenceImgs ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${evidenceImgs}</div>` : ''}
+            ${r.resolvedBy ? `<div style="color:rgba(255,255,255,0.3);font-size:11px;margin-bottom:8px">Resuelto por @${esc(r.resolvedBy.username)} · ${r.modNotes ? esc(r.modNotes) : ''}</div>` : ''}
+            <div style="display:flex;gap:8px;flex-wrap:wrap">${actionBtns.join('')}</div>
+          </div>
+        </div>`;
+    }).join('');
+
+    const baseUrl = `/mod/reports?token=${encodeURIComponent(token)}${filterStatus?'&status='+filterStatus:''}${filterType?'&type='+filterType:''}`;
+
+    const statusFilters = ['all','pending','reviewed','dismissed'].map(s => {
+      const label = s === 'all' ? 'Todos' : (STATUS_LABEL[s]||s);
+      const active = (filterStatus||'all') === s;
+      return `<a href="/mod/reports?token=${encodeURIComponent(token)}&status=${s}${filterType?'&type='+filterType:''}" style="padding:5px 14px;border-radius:20px;border:1px solid ${active?'#00e5cc':'rgba(255,255,255,0.12)'};color:${active?'#00e5cc':'rgba(255,255,255,0.5)'};font-size:12px;text-decoration:none">${label}</a>`;
+    }).join('');
+
+    const typeFilters = ['all','post','user','group'].map(t => {
+      const label = t === 'all' ? 'Todos' : (TYPE_LABEL[t]||t);
+      const active = (filterType||'all') === t;
+      return `<a href="/mod/reports?token=${encodeURIComponent(token)}${filterStatus?'&status='+filterStatus:''}&type=${t}" style="padding:5px 14px;border-radius:20px;border:1px solid ${active?(TYPE_COLOR[t]||'#00e5cc'):'rgba(255,255,255,0.12)'};color:${active?(TYPE_COLOR[t]||'#00e5cc'):'rgba(255,255,255,0.5)'};font-size:12px;text-decoration:none">${label}</a>`;
+    }).join('');
+
+    const body = `
+      ${modNavBar(token, 'Reportes')}
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10">
+        <h2 style="color:#e8f4f8;font-size:18px;font-weight:800">Reportes <span style="color:rgba(255,255,255,0.35);font-size:13px;font-weight:400">${total} total · pag. ${page}</span></h2>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${statusFilters}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px">${typeFilters}</div>
+      ${reports.length === 0
+        ? '<p style="color:rgba(255,255,255,0.35);text-align:center;padding:40px 0">Sin reportes.</p>'
+        : `<div style="display:flex;flex-direction:column;gap:10px">${rows}</div>`}
+      ${pagerLinks(baseUrl, page, reports.length === PAGE)}
+      <script>
+        const tok = new URLSearchParams(location.search).get('token');
+        async function repAction(id, status) {
+          const r = await fetch('/api/reports/'+id,{method:'PATCH',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({status})});
+          if(r.ok) location.reload(); else alert('Error al actualizar');
+        }
+        async function delPost(id) {
+          if(!confirm('Eliminar el post reportado?')) return;
+          const r = await fetch('/api/reports/'+id+'/action/post',{method:'DELETE',headers:{Authorization:'Bearer '+tok}});
+          if(r.ok) location.reload(); else alert('Error al eliminar el post');
+        }
+        async function banUser(id) {
+          const reason = prompt('Razon del ban (opcional):');
+          if(reason === null) return;
+          const r = await fetch('/api/reports/'+id+'/action/ban',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tok},body:JSON.stringify({reason})});
+          if(r.ok) { const d = await r.json(); alert('Usuario @'+d.username+' baneado.'); location.reload(); }
+          else alert('Error al banear');
+        }
+        async function repDelete(id) {
+          if(!confirm('Eliminar este reporte?')) return;
+          const r = await fetch('/api/reports/'+id,{method:'DELETE',headers:{Authorization:'Bearer '+tok}});
+          if(r.ok) location.reload(); else alert('Error al eliminar reporte');
+        }
+      </script>`;
+
+    res.send(page('Reportes — Admin', `<div style="max-width:900px;margin:28px auto;padding:0 16px">${body}</div>`));
   } catch (err) {
     res.status(500).send(page('Error', `<div class="not-found">Error: ${esc(err.message)}</div>`));
   }

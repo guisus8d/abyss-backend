@@ -156,6 +156,15 @@ router.post('/:id/action/ban', authMiddleware, modOnly, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Eliminar registro de reporte (mod) ───────────────────────────────────────
+router.delete('/:id', authMiddleware, modOnly, async (req, res) => {
+  try {
+    const deleted = await Report.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ error: 'Reporte no encontrado' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Conteo pendientes ─────────────────────────────────────────────────────────
 router.get('/count/pending', authMiddleware, modOnly, async (req, res) => {
   try {
