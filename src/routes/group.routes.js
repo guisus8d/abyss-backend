@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const Group  = require('../models/Group');
 const User   = require('../models/User');
+const Post   = require('../models/Post');
 const { authMiddleware } = require('../middlewares/auth');
 const { uploadAvatar, uploadGroupImage, uploadGroupBg } = require('../config/cloudinary');
 
@@ -229,6 +230,45 @@ router.delete('/circles/:id/leave', authMiddleware, async (req, res) => {
 
     await circle.save();
     res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Compartir círculo como post en el feed
+router.post('/circles/:id/share', authMiddleware, async (req, res) => {
+  try {
+    console.log('[SHARE-CIRCLE] groupId:', req.params.id);
+    console.log('[SHARE-CIRCLE] userId:', req.user._id);
+
+    const circle = await Group.findOne({ _id: req.params.id, isCircle: true });
+    console.log('[SHARE-CIRCLE] group found:', !!circle);
+    if (!circle) return res.status(404).json({ error: 'Círculo no encontrado' });
+
+    const adminCheck = isAdminOrCoAdmin(circle, req.user._id);
+    console.log('[SHARE-CIRCLE] isAdminOrCoAdmin:', adminCheck);
+    if (!adminCheck) {
+      return res.status(403).json({ error: 'Solo admins y co-admins pueden compartir la fiesta' });
+    }
+
+    let post;
+    try {
+      post = await Post.create({
+        postType:     'circle_share',
+        author:       req.user._id,
+        circleRef:    circle._id,
+        imageUrl:     circle.imageUrl || null,
+        title:        circle.name,
+        content:      circle.description || '',
+        tags:         circle.hashtags || [],
+        membersCount: circle.membersCount || circle.members?.length || 0,
+      });
+      console.log('[SHARE-CIRCLE] post creado:', post._id);
+    } catch (createErr) {
+      console.error('[SHARE-CIRCLE] error creando post:', createErr.message);
+      throw createErr;
+    }
+
+    await post.populate('author', '_id username avatarUrl xp profileFrame profileFrameUrl role gender isCreator');
+    res.json({ post, ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

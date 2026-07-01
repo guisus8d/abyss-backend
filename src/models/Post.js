@@ -18,7 +18,7 @@ const commentSchema = new mongoose.Schema({
 });
 
 const postSchema = new mongoose.Schema({
-  postType: { type: String, default: "quick", enum: ["quick","image","news","video"] },
+  postType: { type: String, default: "quick", enum: ["quick","image","news","video","circle_share"] },
   title:    { type: String, default: "" },
   author:         { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   content:        { type: String, required: true, maxlength: 5000 },
@@ -32,6 +32,8 @@ const postSchema = new mongoose.Schema({
   videoEndTime:      { type: Number, default: null },
   videoThumbnailUrl: { type: String, default: null },
   tags:           [{ type: String }],
+  circleRef:      { type: mongoose.Schema.Types.ObjectId, ref: 'Group', default: null },
+  membersCount:   { type: Number, default: 0 },
   group:          { type: mongoose.Schema.Types.ObjectId, ref: 'Group', default: null },
   reactions:      [reactionSchema],
   comments:       [commentSchema],
