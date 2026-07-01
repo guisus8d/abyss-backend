@@ -239,10 +239,10 @@ router.get('/mod/bugs', async (req, res) => {
 
   try {
     const PAGE = 20;
-    const page = Math.max(1, parseInt(pageQ) || 1);
+    const pg   = Math.max(1, parseInt(pageQ) || 1);
     const filter = filterStatus ? { status: filterStatus } : {};
     const [bugs, total] = await Promise.all([
-      BugReport.find(filter).sort({ createdAt: -1 }).skip((page-1)*PAGE).limit(PAGE)
+      BugReport.find(filter).sort({ createdAt: -1 }).skip((pg-1)*PAGE).limit(PAGE)
         .populate('user', 'username avatarUrl').lean(),
       BugReport.countDocuments(filter),
     ]);
@@ -296,13 +296,13 @@ router.get('/mod/bugs', async (req, res) => {
     const body = `
       ${modNavBar(token, 'Bugs')}
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10">
-        <h2 style="color:#e8f4f8;font-size:18px;font-weight:800">Reportes de Bugs <span style="color:rgba(255,255,255,0.35);font-size:13px;font-weight:400">${total} total · pag. ${page}</span></h2>
+        <h2 style="color:#e8f4f8;font-size:18px;font-weight:800">Reportes de Bugs <span style="color:rgba(255,255,255,0.35);font-size:13px;font-weight:400">${total} total · pag. ${pg}</span></h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap">${filterLinks}</div>
       </div>
       ${bugs.length === 0
         ? '<p style="color:rgba(255,255,255,0.35);text-align:center;padding:40px 0">Sin reportes.</p>'
         : `<div style="display:flex;flex-direction:column;gap:10px">${rows}</div>`}
-      ${pagerLinks(baseUrl, page, bugs.length === PAGE)}
+      ${pagerLinks(baseUrl, pg, bugs.length === PAGE)}
       <script>
         const tok = new URLSearchParams(location.search).get('token');
         async function bugStatus(id, status) {
@@ -333,7 +333,7 @@ router.get('/mod/reports', async (req, res) => {
 
   try {
     const PAGE = 20;
-    const page = Math.max(1, parseInt(pageQ) || 1);
+    const pg   = Math.max(1, parseInt(pageQ) || 1);
     const filter = {};
     if (filterStatus && filterStatus !== 'all') filter.status = filterStatus;
     if (filterType   && filterType   !== 'all') filter.type   = filterType;
@@ -341,7 +341,7 @@ router.get('/mod/reports', async (req, res) => {
     const [reports, total] = await Promise.all([
       Report.find(filter)
         .sort({ createdAt: -1 })
-        .skip((page-1)*PAGE).limit(PAGE)
+        .skip((pg-1)*PAGE).limit(PAGE)
         .populate('reporter',       'username avatarUrl')
         .populate('targetAuthorId', 'username')
         .populate('resolvedBy',     'username')
@@ -418,14 +418,14 @@ router.get('/mod/reports', async (req, res) => {
     const body = `
       ${modNavBar(token, 'Reportes')}
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:10">
-        <h2 style="color:#e8f4f8;font-size:18px;font-weight:800">Reportes <span style="color:rgba(255,255,255,0.35);font-size:13px;font-weight:400">${total} total · pag. ${page}</span></h2>
+        <h2 style="color:#e8f4f8;font-size:18px;font-weight:800">Reportes <span style="color:rgba(255,255,255,0.35);font-size:13px;font-weight:400">${total} total · pag. ${pg}</span></h2>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${statusFilters}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px">${typeFilters}</div>
       ${reports.length === 0
         ? '<p style="color:rgba(255,255,255,0.35);text-align:center;padding:40px 0">Sin reportes.</p>'
         : `<div style="display:flex;flex-direction:column;gap:10px">${rows}</div>`}
-      ${pagerLinks(baseUrl, page, reports.length === PAGE)}
+      ${pagerLinks(baseUrl, pg, reports.length === PAGE)}
       <script>
         const tok = new URLSearchParams(location.search).get('token');
         async function repAction(id, status) {
