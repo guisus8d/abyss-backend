@@ -4,6 +4,7 @@ const User   = require('../models/User');
 const Post   = require('../models/Post');
 const { authMiddleware } = require('../middlewares/auth');
 const { uploadAvatar, uploadGroupImage, uploadGroupBg } = require('../config/cloudinary');
+const { releaseUserRoles } = require('./role.routes');
 
 function getIO() {
   try { return require('../sockets').getIO(); } catch { return null; }
@@ -64,7 +65,7 @@ router.post('/circles', authMiddleware, uploadGroupImage.single('image'), async 
 router.get('/circles/mine', authMiddleware, async (req, res) => {
   try {
     const circles = await Group.find({ isCircle: true, 'members.user': req.user._id })
-      .select('name description imageUrl hashtags rules membersCount members lastMessage lastMessageText lastMessageSender unreadCounts creator isCircle isPublic isActive activatedAt')
+      .select('name description imageUrl hashtags rules membersCount members lastMessage lastMessageText lastMessageSender unreadCounts creator isCircle isPublic isActive activatedAt roleplayActive')
       .populate('members.user', 'username avatarUrl profileFrame profileFrameUrl')
       .sort({ lastMessage: -1 });
     res.json({ circles });
@@ -139,6 +140,31 @@ router.patch('/circles/:id/toggle-active', authMiddleware, async (req, res) => {
     } else {
       getIO()?.to(`group:${circle._id}`).emit('circle:deactivated', { groupId: circle._id.toString() });
     }
+    res.json({ group: circle });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Activar / desactivar Sala de Rol (admin o co-admin) — apaga el cine si estaba activo
+router.post('/circles/:id/toggle-roleplay', authMiddleware, async (req, res) => {
+  try {
+    const circle = await Group.findOne({ _id: req.params.id, isCircle: true });
+    if (!circle) return res.status(404).json({ error: 'Círculo no encontrado' });
+
+    if (!isAdminOrCoAdmin(circle, req.user._id))
+      return res.status(403).json({ error: 'Solo admin o co-admin puede cambiar el estado' });
+
+    circle.roleplayActive = !circle.roleplayActive;
+    await circle.save();
+
+    if (circle.roleplayActive) {
+      await require('../sockets').stopCinemaForGroup(circle._id.toString());
+      getIO()?.to(`group:${circle._id}`).emit('circle:roleplay:start', { groupId: circle._id.toString() });
+    } else {
+      const Role = require('../models/Role');
+      await Role.updateMany({ group: circle._id, takenBy: { $ne: null } }, { takenBy: null });
+      getIO()?.to(`group:${circle._id}`).emit('circle:roleplay:stop', { groupId: circle._id.toString() });
+    }
+
     res.json({ group: circle });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -456,6 +482,10 @@ router.post('/:id/kick/:memberId', authMiddleware, async (req, res) => {
     if (target.role === 'admin') return res.status(403).json({ error: 'No puedes expulsar a un admin' });
     if (target.role === 'co-admin' && callerRole !== 'admin') return res.status(403).json({ error: 'Solo el admin puede expulsar a un co-admin' });
 
+    if (group.isCircle && group.roleplayActive) {
+      await releaseUserRoles(group._id, req.params.memberId);
+    }
+
     const kickedUser = await User.findById(req.params.memberId).select('username').lean();
     group.members = group.members.filter(m => m.user.toString() !== req.params.memberId);
     await group.save();
@@ -488,6 +518,10 @@ router.delete('/:id/members/:memberId', authMiddleware, async (req, res) => {
     if (target?.role === 'admin') return res.status(403).json({ error: 'No puedes expulsar a un admin' });
     if (target?.role === 'co-admin' && callerRole !== 'admin') return res.status(403).json({ error: 'Solo el admin puede expulsar a un co-admin' });
 
+    if (group.isCircle && group.roleplayActive) {
+      await releaseUserRoles(group._id, req.params.memberId);
+    }
+
     const kickedUser = await User.findById(req.params.memberId).select('username').lean();
     group.members = group.members.filter(m => m.user.toString() !== req.params.memberId);
     await group.save();
@@ -513,6 +547,10 @@ router.post('/:id/leave', authMiddleware, async (req, res) => {
     if (!group) return res.status(404).json({ error: 'Grupo no encontrado' });
     const isMember = group.members.some(m => m.user.toString() === req.user._id.toString());
     if (!isMember) return res.status(404).json({ error: 'No eres miembro' });
+
+    if (group.isCircle && group.roleplayActive) {
+      await releaseUserRoles(group._id, req.user._id);
+    }
 
     const leavingUser = await User.findById(req.user._id).select('username').lean();
 
@@ -746,6 +784,10 @@ router.post('/:id/ban/:userId', authMiddleware, async (req, res) => {
       group.messages = group.messages.filter(
         m => m.sender?.toString() !== req.params.userId
       );
+    }
+
+    if (group.isCircle && group.roleplayActive) {
+      await releaseUserRoles(group._id, req.params.userId);
     }
 
     group.bannedUsers.push(req.params.userId);

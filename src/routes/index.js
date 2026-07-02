@@ -11,6 +11,7 @@ router.use('/chats',        require('./chat.routes'));
 router.use('/social',       require('./social.routes'));
 router.use('/notifications',require('./notification.routes'));
 router.use('/groups',       require('./group.routes'));
+router.use('/roles',        require('./role.routes'));
 router.use('/reports',      require('./report.routes'));
 router.use('/modlogs',      require('./modlog.routes'));
 router.use('/mod',          require('./mod.routes'));

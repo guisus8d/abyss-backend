@@ -71,6 +71,7 @@ const groupSchema = new mongoose.Schema({
   isCircle:        { type: Boolean, default: false },
   isPublic:        { type: Boolean, default: false },
   isActive:        { type: Boolean, default: true },
+  roleplayActive:  { type: Boolean, default: false },
   activatedAt:     { type: Date,    default: null },
   hashtags:        [{ type: String }],
   rules:              [{ type: String, maxlength: 200 }],

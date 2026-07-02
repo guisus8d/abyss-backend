@@ -160,6 +160,17 @@ const groupImageStorage = new CloudinaryStorage({
 });
 const uploadGroupImage = multer({ storage: groupImageStorage, limits: { fileSize: 10 * 1024 * 1024 } });
 
+// ── Imágenes de rol (Sala de Rol) ─────────────────────────────────────────────
+const roleImageStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder:          'abbys/role-images',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+    transformation:  [{ width: 400, height: 400, crop: 'fill', gravity: 'face' }],
+  },
+});
+const uploadRoleImage = multer({ storage: roleImageStorage, limits: { fileSize: 5 * 1024 * 1024 } });
+
 // ── Fondos de grupo ───────────────────────────────────────────────────────────
 const groupBgStorage = new CloudinaryStorage({
   cloudinary,
@@ -218,6 +229,7 @@ const uploadAudio = multer({ storage: audioStorage, limits: { fileSize: 20 * 102
 module.exports = {
   cloudinary,
   uploadAvatar,
+  uploadRoleImage,
   uploadGroupImage,
   uploadBugReport,
   uploadGroupBg,
