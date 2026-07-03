@@ -9,6 +9,7 @@ const MeetSession = require('../models/MeetSession');
 const { sendPush } = require('../utils/pushNotifications');
 
 const cinemaActiveSessions = new Map(); // groupId → { videoId, startedAt, proyectorId, proyectorUsername }
+const pushCooldown = new Map(); // `${chatId}:${recipientId}` → timestamp del último push enviado
 
 async function handleProyectorLeave(userId, io, specificGroupId = null) {
   for (const [groupId, session] of cinemaActiveSessions.entries()) {
@@ -210,19 +211,33 @@ function initSockets(server) {
           },
         });
 
-        await Promise.all(chat.participants
-          .filter(p => p.toString() !== socket.userId.toString())
-          .map(async p => {
-            io.to(`user:${p}`).emit('chat:notification', {
-              chatId,
-              lastMessageText: chat.lastMessageText,
-              lastMessage:     chat.lastMessage,
-            });
-            const recipient = await User.findById(p).select('pushToken username').lean();
-            const preview = type === 'image' ? '📷 Imagen' : type === 'audio' ? '🎤 Audio' : (text?.trim()?.slice(0, 60) || '');
-            sendPush(recipient?.pushToken, `${populated.sender?.username || 'Mensaje'}`, preview, { type: 'chat', chatId: chatId.toString() });
-          })
-        );
+        for (const p of chat.participants) {
+          if (p.toString() === socket.userId.toString()) continue;
+
+          io.to(`user:${p}`).emit('chat:notification', {
+            chatId,
+            lastMessageText: chat.lastMessageText,
+            lastMessage:     chat.lastMessage,
+          });
+
+          // No push si el receptor tiene este chat abierto ahora mismo
+          const chatRoom = io.sockets.adapter.rooms.get(`chat:${chatId}`);
+          const userRoom = io.sockets.adapter.rooms.get(`user:${p}`);
+          const isActive = chatRoom && userRoom &&
+            [...chatRoom].some(sid => userRoom.has(sid));
+          if (isActive) continue; // ya ve el mensaje en tiempo real
+
+          // Cooldown de 60s por (chatId, receptor) para no spamear en ráfagas
+          const cooldownKey = `${chatId}:${p}`;
+          const lastPush = pushCooldown.get(cooldownKey) || 0;
+          const now = Date.now();
+          if (now - lastPush < 60000) continue;
+          pushCooldown.set(cooldownKey, now);
+
+          const recipient = await User.findById(p).select('pushToken username').lean();
+          const preview = type === 'image' ? '📷 Imagen' : type === 'audio' ? '🎤 Audio' : (text?.trim()?.slice(0, 60) || '');
+          sendPush(recipient?.pushToken, `${populated.sender?.username || 'Mensaje'}`, preview, { type: 'chat', chatId: chatId.toString() });
+        }
       } catch (err) {
         console.error('chat:send error:', err.message);
       }
