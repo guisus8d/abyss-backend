@@ -20,7 +20,30 @@ function isAdminOrCoAdmin(group, userId) {
 async function releaseUserRoles(groupId, userId) {
   const taken = await Role.find({ group: groupId, takenBy: userId }).select('_id');
   if (!taken.length) return;
-  await Role.updateMany({ group: groupId, takenBy: userId }, { takenBy: null });
+  const now = new Date();
+  await Role.updateMany(
+    { group: groupId, takenBy: userId },
+    [
+      {
+        $set: {
+          totalActiveMinutes: {
+            $add: [
+              '$totalActiveMinutes',
+              {
+                $cond: [
+                  { $ifNull: ['$takenAt', false] },
+                  { $floor: { $divide: [{ $subtract: [now, '$takenAt'] }, 60000] } },
+                  0,
+                ],
+              },
+            ],
+          },
+          takenBy: null,
+          takenAt: null,
+        },
+      },
+    ]
+  );
   const io = getIO();
   for (const r of taken) {
     io?.to(`group:${groupId}`).emit('circle:role:released', { roleId: r._id.toString(), userId: userId.toString() });
@@ -124,7 +147,7 @@ router.post('/:roleId/take', authMiddleware, async (req, res) => {
 
     const updated = await Role.findOneAndUpdate(
       { _id: req.params.roleId, takenBy: null },
-      { takenBy: req.user._id },
+      { $set: { takenBy: req.user._id, takenAt: new Date() }, $inc: { timesUsed: 1 } },
       { new: true }
     );
     if (!updated) return res.status(400).json({ error: 'Rol ya tomado' });
@@ -149,7 +172,10 @@ router.post('/:roleId/release', authMiddleware, async (req, res) => {
     if (!role.takenBy || role.takenBy.toString() !== req.user._id.toString()) {
       return res.status(403).json({ error: 'No tienes este rol' });
     }
+    const minutosActivos = role.takenAt ? Math.floor((Date.now() - role.takenAt) / 60000) : 0;
     role.takenBy = null;
+    role.takenAt = null;
+    role.totalActiveMinutes += minutosActivos;
     await role.save();
     getIO()?.to(`group:${role.group}`).emit('circle:role:released', {
       roleId: role._id.toString(),

@@ -7,6 +7,9 @@ const roleSchema = new mongoose.Schema({
   imageUrl:    { type: String, default: null },
   borderColor: { type: String, default: '#ffffff' },
   takenBy:     { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  takenAt:            { type: Date,   default: null },
+  timesUsed:          { type: Number, default: 0 },
+  totalActiveMinutes: { type: Number, default: 0 },
 }, { timestamps: true });
 
 roleSchema.index({ group: 1 });
