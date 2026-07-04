@@ -62,12 +62,9 @@ async function apagarFiestasExpiradas() {
 }
 
 function startCircleCron() {
-  cron.schedule('*/5 * * * *', () => {
-    apagarFiestasExpiradas().catch(err =>
-      console.error('[circleCron] Error:', err.message)
-    );
-  });
-  console.log('[circleCron] Cron de apagado activo (cada 5 min, ventana 1 hora)');
+  // Cron deshabilitado — las fiestas ahora solo se apagan manualmente
+  // por el admin/co-admin. El campo activatedAt se conserva en Group.js.
+  console.log('[circleCron] Cron de apagado deshabilitado (apagado manual)');
 }
 
 module.exports = { startCircleCron, apagarFiestasExpiradas };
