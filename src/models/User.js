@@ -20,7 +20,7 @@ const userSchema = new mongoose.Schema({
   profileBgType:    { type: String, default: 'color' },
   profileBlocks:    { type: Array,  default: [] },
   googleId:         { type: String, default: null },
-  coins:             { type: Number, default: 50 },
+  coins:             { type: Number, default: 0 },
   coinsReservadas:   { type: Number, default: 0 },   // en escrow por regalos enviados
   collectionSlots:   { type: Number, default: 10 },
   role:             { type: String, default: 'user', enum: ['user', 'collaborator', 'mod', 'admin'] },
