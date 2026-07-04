@@ -381,7 +381,9 @@ async function deletePost(req, res) {
   try {
     const post = await Post.findById(req.params.id);
     if (!post) return res.status(404).json({ error: 'Post no encontrado' });
-    if (post.author.toString() !== req.user._id.toString())
+    const isOwner      = post.author.toString() === req.user._id.toString();
+    const isModOrAdmin = req.user.role === 'admin' || req.user.role === 'mod';
+    if (!isOwner && !isModOrAdmin)
       return res.status(403).json({ error: 'No autorizado' });
     if (post.imagePublicId) await cloudinary.uploader.destroy(post.imagePublicId);
     await post.deleteOne();
