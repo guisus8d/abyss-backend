@@ -25,4 +25,5 @@ router.use('/wall',         require('./wall.routes'));
 router.use('/ads',          require('./ads.routes'));
 router.use('/meet',         require('./meet.routes'));
 router.use('/bug-reports',  require('./bugreport.routes'));
+router.use('/beta',         require('./beta.routes'));
 module.exports = router;
