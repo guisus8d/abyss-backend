@@ -16,7 +16,7 @@ async function getUserByUsername(req, res) {
     console.log('[USER-DEBUG] buscando username:', req.params.username, 'decoded:', decodeURIComponent(req.params.username));
     const user = await User.findOne({ username: decodeURIComponent(req.params.username) })
       .populate('badges')
-      .select('-passwordHash -blocked');
+      .select('-passwordHash -blocked -email');
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
     res.json({ user });
   } catch (err) {

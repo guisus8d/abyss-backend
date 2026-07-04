@@ -6,42 +6,45 @@ const Notification = require('../models/Notification');
 const AD_DAILY_LIMIT  = 5;
 const COINS_PER_AD    = 3;
 
-function isSameUTCDay(date) {
-  if (!date) return false;
-  const now = new Date();
-  const d   = new Date(date);
-  return (
-    d.getUTCFullYear() === now.getUTCFullYear() &&
-    d.getUTCMonth()    === now.getUTCMonth()    &&
-    d.getUTCDate()     === now.getUTCDate()
-  );
-}
-
 // POST /ads/reward
 router.post('/reward', authMiddleware, async (req, res) => {
   try {
     const userId = req.user._id;
-    const user   = await User.findById(userId).select('coins adViewsToday');
+    const startOfToday = new Date();
+    startOfToday.setUTCHours(0, 0, 0, 0);
 
-    const sameDay    = isSameUTCDay(user.adViewsToday?.date);
-    const countToday = sameDay ? (user.adViewsToday?.count ?? 0) : 0;
-
-    if (countToday >= AD_DAILY_LIMIT) {
-      return res.status(429).json({ error: 'Límite diario de anuncios alcanzado' });
-    }
-
-    const newCount = countToday + 1;
-    const updated  = await User.findByIdAndUpdate(
-      userId,
+    // Intento 1: mismo día y aún con cupo — incrementa atómicamente.
+    let updated = await User.findOneAndUpdate(
       {
-        $inc: { coins: COINS_PER_AD },
-        $set: {
-          'adViewsToday.count': newCount,
-          'adViewsToday.date':  new Date(),
-        },
+        _id: userId,
+        'adViewsToday.date':  { $gte: startOfToday },
+        'adViewsToday.count': { $lt: AD_DAILY_LIMIT },
       },
+      { $inc: { coins: COINS_PER_AD, 'adViewsToday.count': 1 } },
       { new: true, select: 'coins adViewsToday' },
     );
+
+    // Intento 2: día nuevo (o nunca vio un anuncio) — resetea el contador a 1.
+    if (!updated) {
+      updated = await User.findOneAndUpdate(
+        {
+          _id: userId,
+          $or: [
+            { 'adViewsToday.date': null },
+            { 'adViewsToday.date': { $lt: startOfToday } },
+          ],
+        },
+        {
+          $inc: { coins: COINS_PER_AD },
+          $set: { 'adViewsToday.count': 1, 'adViewsToday.date': new Date() },
+        },
+        { new: true, select: 'coins adViewsToday' },
+      );
+    }
+
+    if (!updated) {
+      return res.status(429).json({ error: 'Límite diario de anuncios alcanzado' });
+    }
 
     await Notification.create({
       to:   userId,

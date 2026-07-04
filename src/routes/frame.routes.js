@@ -255,40 +255,62 @@ router.delete('/:id/listing', authMiddleware, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-// ── POST /frames/:id/buy — compra legacy (sin sesión) ──────────────────────
-// Mantener por compatibilidad con el cliente anterior
-// Para nuevas integraciones usar POST /api/market/frames/:id/buy
+// ── POST /frames/:id/buy — compra desde la tienda local del creador ────────
+// Usa sesión MongoDB para atomicidad, igual que POST /api/market/frames/:id/buy.
+// Ambos endpoints son necesarios: este es el flujo de FrameDetailScreen.js
+// (tienda local del creador); el de market.routes.js es el del mercado general.
 router.post('/:id/buy', authMiddleware, async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   try {
-    const frame = await Frame.findById(req.params.id).populate('creator');
-    if (!frame || frame.status !== 'active') return res.status(404).json({ error: 'Marco no disponible' });
-    if (frame.units <= 0) return res.status(400).json({ error: 'Sin unidades disponibles' });
+    const frame = await Frame.findById(req.params.id).populate('creator').session(session);
+    if (!frame || frame.status !== 'active')
+      throw Object.assign(new Error('Marco no disponible'), { status: 404 });
+    if (frame.units <= 0)
+      throw Object.assign(new Error('Sin unidades disponibles'), { status: 400 });
 
-    const buyer = await User.findById(req.user._id);
-    if (buyer.coins < frame.price) return res.status(400).json({ error: 'Monedas insuficientes' });
-
-    const slotsUsados = await FrameOwnership.countDocuments({ user: req.user._id, units: { $gt: 0 } });
-    if (slotsUsados >= buyer.collectionSlots)
-      return res.status(400).json({ error: `Colección llena (${buyer.collectionSlots} slots)` });
+    const buyerSlots = await User.findById(req.user._id).select('collectionSlots').session(session);
+    const slotsUsados = await FrameOwnership.countDocuments({ user: req.user._id, units: { $gt: 0 } }).session(session);
+    if (slotsUsados >= buyerSlots.collectionSlots)
+      throw Object.assign(new Error(`Colección llena (${buyerSlots.collectionSlots} slots)`), { status: 400 });
 
     const creatorEarnings = Math.round(frame.price * 0.85);
-    buyer.coins -= frame.price;
-    await buyer.save();
-    await User.findByIdAndUpdate(frame.creator._id, { $inc: { coins: creatorEarnings } });
+
+    // Débito atómico del comprador — falla si el saldo es insuficiente
+    const buyer = await User.findOneAndUpdate(
+      { _id: req.user._id, coins: { $gte: frame.price } },
+      { $inc: { coins: -frame.price } },
+      { session, new: true }
+    );
+    if (!buyer) throw Object.assign(new Error('Monedas insuficientes'), { status: 400 });
+
+    await User.findByIdAndUpdate(frame.creator._id, { $inc: { coins: creatorEarnings } }, { session });
 
     await FrameOwnership.findOneAndUpdate(
       { user: req.user._id, frame: frame._id },
       { $inc: { units: 1 }, $setOnInsert: { origen: 'compra' } },
-      { upsert: true, new: true }
+      { upsert: true, session, new: true }
     );
 
-    frame.units     -= 1;
-    frame.totalSold += 1;
-    if (frame.units === 0) frame.status = 'agotado';
-    await frame.save();
+    // Descuento atómico de stock — falla si se agotó entre la lectura y este punto
+    const updatedFrame = await Frame.findOneAndUpdate(
+      { _id: frame._id, units: { $gt: 0 } },
+      { $inc: { units: -1, totalSold: 1 } },
+      { session, new: true }
+    );
+    if (!updatedFrame) throw Object.assign(new Error('Sin unidades disponibles'), { status: 400 });
+    if (updatedFrame.units === 0) {
+      await Frame.findByIdAndUpdate(frame._id, { status: 'agotado' }, { session });
+    }
 
+    await session.commitTransaction();
     res.json({ message: 'Marco comprado', newCoins: buyer.coins });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    await session.abortTransaction();
+    res.status(err.status || 500).json({ error: err.message });
+  } finally {
+    session.endSession();
+  }
 });
 
 // ── POST /frames/slots/expand ────────────────────────────────────────────────
