@@ -98,3 +98,7 @@ startGiftCron();
 // Cron de apagado automático de fiestas (1 hora)
 const { startCircleCron } = require('./utils/circleCron');
 startCircleCron();
+
+// Bot de Discord para verificación de beta testers
+const { startDiscordBot } = require('./utils/discordBot');
+startDiscordBot();
