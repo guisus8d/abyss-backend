@@ -6,9 +6,24 @@ const {
   SlashCommandBuilder,
   Events,
 } = require('discord.js');
+const { google } = require('googleapis');
 const BetaRegistration = require('../models/BetaRegistration');
 
 const PLAY_STORE_URL = 'https://play.google.com/apps/internaltest/4701377691744254634';
+const GOOGLE_BETA_GROUP = 'abyss-beta-testers@googlegroups.com';
+
+async function addToGoogleGroup(email) {
+  const auth = new google.auth.JWT({
+    email: process.env.PLAY_SERVICE_ACCOUNT_EMAIL,
+    key: process.env.PLAY_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    scopes: ['https://www.googleapis.com/auth/admin.directory.group.member'],
+  });
+  const directory = google.admin({ version: 'directory_v1', auth });
+  await directory.members.insert({
+    groupKey: GOOGLE_BETA_GROUP,
+    requestBody: { email, role: 'MEMBER' },
+  });
+}
 
 const verificarCommand = new SlashCommandBuilder()
   .setName('verificar')
@@ -49,6 +64,12 @@ async function handleVerificar(interaction) {
     const guild = await interaction.client.guilds.fetch(process.env.DISCORD_GUILD_ID);
     const member = await guild.members.fetch(interaction.user.id);
     await member.roles.add(process.env.DISCORD_BETA_ROLE_ID);
+
+    try {
+      await addToGoogleGroup(email);
+    } catch (groupErr) {
+      console.warn(`[discordBot] No se pudo agregar ${email} al Google Group:`, groupErr.message);
+    }
 
     try {
       await member.send(`Ya tienes acceso a la beta de Abyss Social.\nInstala aquí: ${PLAY_STORE_URL}`);
