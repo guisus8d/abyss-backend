@@ -36,7 +36,7 @@ async function handleVerificar(interaction) {
     });
   }
 
-  await interaction.deferReply();
+  await interaction.deferReply({ ephemeral: true });
 
   try {
     const email = interaction.options.getString('email', true).toLowerCase().trim();
