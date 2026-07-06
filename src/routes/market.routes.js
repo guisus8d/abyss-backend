@@ -6,6 +6,7 @@ const Frame          = require('../models/Frame');
 const FrameOwnership = require('../models/FrameOwnership');
 const Store          = require('../models/Store');
 const User           = require('../models/User');
+const Transaction    = require('../models/Transaction');
 const Notification   = require('../models/Notification');
 const { transferirCoins } = require('../utils/coins');
 const { getIO }      = require('../sockets');
@@ -140,6 +141,19 @@ router.post('/frames/:id/buy', authMiddleware, async (req, res) => {
   } finally {
     session.endSession();
   }
+});
+
+// ── GET /api/market/my-sales ─────────────────────────────────────────────────
+// Historial de ventas del usuario autenticado (marcos que vendió como creador)
+router.get('/my-sales', authMiddleware, async (req, res) => {
+  try {
+    const sales = await Transaction.find({ receptor: req.user._id, tipo: 'compra_marco' })
+      .sort({ createdAt: -1 })
+      .populate('item', 'name imageUrl')
+      .populate('emisor', 'username avatarUrl')
+      .lean();
+    res.json({ sales });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ── POST /api/market/frames/:id/like — toggle like ─────────────────────────
